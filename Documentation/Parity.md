@@ -62,14 +62,15 @@ Opening Mode preserves unapplied numeric/knot text and pending gate forms. Selec
 
 This is a bounded audit of the actual stopped V2 command handlers, not a new feature wish list. Application.cpp Command/Key and TrackWorkspace.cpp Command/BeginDrive/EndDrive were compared with App.cpp Command/Pointer/Key and Editor.cpp. Core model/material/track/racing/persistence workflows in the table above are integrated and tested. The following legacy functions or behavioral differences remain; the earlier description of scroll as the only functional gap was incomplete.
 
-| Area                 | Existing V2 behavior                                          | Remaining V3 difference                                         |
-| -------------------- | ------------------------------------------------------------- | --------------------------------------------------------------- |
-| Model objects        | Duplicate selected object, Delete shape, Rename               | No custom bindings/domain commands for those three actions      |
-| Model view/shortcut  | Front/Top/Side/Orbit preset buttons; Ctrl+O                   | Orbit/pan/frame exist; preset buttons and Ctrl+O are absent     |
-| Track authoring      | Three controls finish a degree-2 outline; delete start pose   | Finish currently requires four/cubic; no delete-start action    |
-| Track tool selection | Draw starts a top view; outline selection returns to Select   | Tool/view reset conventions differ in current custom routing    |
-| Model replacement    | New/Open asks to save unsaved data, then resets model history | V3 replacement remains undoable, without the save-before prompt |
-| Verification         | Physical device/OS/scanout checks were not completed in V2    | Still pending; automated injection is not physical validation   |
+| Area                  | Existing V2 behavior                                          | Remaining V3 difference                                         |
+| --------------------- | ------------------------------------------------------------- | --------------------------------------------------------------- |
+| Model objects         | Duplicate selected object, Delete shape, Rename               | No custom bindings/domain commands for those three actions      |
+| Model view/shortcut   | Front/Top/Side/Orbit preset buttons; Ctrl+O                   | Orbit/pan/frame exist; preset buttons and Ctrl+O are absent     |
+| Track authoring       | Three controls finish a degree-2 outline; delete start pose   | Finish currently requires four/cubic; no delete-start action    |
+| Track tool selection  | Draw starts a top view; outline selection returns to Select   | Tool/view reset conventions differ in current custom routing    |
+| Non-shape track edits | V2 retains built roads for poses/assets/deadzones             | V3 currently clears generated roads, requiring a fresh Build    |
+| Model replacement     | New/Open asks to save unsaved data, then resets model history | V3 replacement remains undoable, without the save-before prompt |
+| Verification          | Physical device/OS/scanout checks were not completed in V2    | Still pending; automated injection is not physical validation   |
 
 Small existing defaults also differ: added shapes use the origin/current default paint instead of V2's view-center/name defaults; new outlines use V3's current neutral surface colors/names. These are observable migration differences, not missing geometry/persistence capability. Numeric transforms commit individual fields rather than V2's Apply form, paint numeric commits use Enter/leave instead of partial live previews, and start/decor headings are labeled radians rather than V2's degrees. The custom UI and fixed 2560x1440/100% presentation are explicit user-directed architecture/presentation changes.
 

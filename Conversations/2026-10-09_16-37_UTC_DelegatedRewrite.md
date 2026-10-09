@@ -417,11 +417,11 @@ The corrected deletion test passed in Debug, and the CRT failure probe exited wi
 
 The full corrected Debug run passed 35/35, including the headless failure probe. I'm rerunning packaging from clean commit `c42529f`. The rejected attempt did not replace the ready build; its evidence is preserved.
 
-The non-cardinal full-turn fix is implemented. The package's Release suite passed 37/37, including deletion and routed UI checks; Debug is finishing with the new headless failure probe already passed. Copied-build verification comes next.
+The non-cardinal full-turn fix is implemented. The package’s Release suite passed 37/37, including deletion and routed UI checks; Debug is finishing with the new headless failure probe already passed. Copied-build verification comes next.
 
 Debug passed 35/35. The self-contained copies are now running the hardware/WARP and launcher checks. Point deletion resets knots and requires rebuilding surfaces; gate deletion retains roads and updates Drive readiness. Both restore the deleted selection on Undo.
 
-The deletion build is verified and ready at `C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_20-55-06-622_c42529f1db5c`, source `c42529f1db5cf2672b3783ae3a054bbafb1122df`. Release 37/37, Debug 35/35 and copied hidden/displayed hardware/WARP checks passed. It includes the wrapped-heading fix. I'm finishing the CMD-launcher and frozen-file audit.
+The deletion build is verified and ready at `C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_20-55-06-622_c42529f1db5c`, source `c42529f1db5cf2672b3783ae3a054bbafb1122df`. Release 37/37, Debug 35/35 and copied hidden/displayed hardware/WARP checks passed. It includes the wrapped-heading fix. I’m finishing the CMD-launcher and frozen-file audit.
 
 The CMD launcher passed from Temp. All 177 hashes match, all 178 files are read-only, and the seven older snapshots are unchanged. The successful displayed runs preserved focus/capture/cursor and recorded zero idle presents; no test process remains. I inspected both deletion captures. Camera-follow is the next existing mode binding.
 
@@ -431,11 +431,11 @@ I informed the user of the Debug runtime dialog incident and the unknown monitor
 
 ## Assistant entry-point extension progress (verbatim)
 
-The snapshot and rejected-run evidence are preserved. I'll extend the CRT reporting policy to every automated headless entry point, including the application's hidden test mode, then rerun the failure probes and package gates. The policy will stay process-local.
+The snapshot and rejected-run evidence are preserved. I’ll extend the CRT reporting policy to every automated headless entry point, including the application’s hidden test mode, then rerun the failure probes and package gates. The policy will stay process-local.
 
 ## Assistant shared policy and V2 camera inspection (verbatim)
 
-The audit found unguarded console tests, SimplePaint's nested copy tests, and hidden/smoke application startup. I'll give them a shared reporting policy and verify each owned entry point with a bounded failure probe. SimplePaint's module files will stay unchanged; the nested test harness will supply the guard.
+The audit found unguarded console tests, SimplePaint’s nested copy tests, and hidden/smoke application startup. I’ll give them a shared reporting policy and verify each owned entry point with a bounded failure probe. SimplePaint’s module files will stay unchanged; the nested test harness will supply the guard.
 
 ## Parent delivery and camera-follow delegation (verbatim)
 
@@ -443,10 +443,48 @@ The corrected deletion snapshot was announced based on the completed launcher/ha
 
 ## Assistant headless and camera implementation progress (verbatim)
 
-The shared guard compiled after I corrected a CRT hook constant. Debug is running; the deletion failure probe and hidden hardware workflow passed. V2's follow setting defaults off, centers the car during Drive, preserves orbit/zoom, and restores the editor camera on exit. I'll carry that behavior forward with one existing-style button.
+The shared guard compiled after I corrected a CRT hook constant. Debug is running; the deletion failure probe and hidden hardware workflow passed. V2’s follow setting defaults off, centers the car during Drive, preserves orbit/zoom, and restores the editor camera on exit. I’ll carry that behavior forward with one existing-style button.
 
-Debug passed 73/73. Controlled failures also exited with stderr evidence in all four fresh SimplePaint copies. The guard now covers 28 owned console entries, both application test modes, checked iterators, narrow/wide reports, abort, terminate and worker-thread invalid parameters. I'll commit this separately, then implement camera-follow.
+Debug passed 73/73. Controlled failures also exited with stderr evidence in all four fresh SimplePaint copies. The guard now covers 28 owned console entries, both application test modes, checked iterators, narrow/wide reports, abort, terminate and worker-thread invalid parameters. I’ll commit this separately, then implement camera-follow.
 
 Camera-follow and free-view routing are implemented. Drive now has a separate camera, so orbit, pan, follow and framing preserve the stored editor views. Tests are running for repeated Drive selection, reset, suspension/resume, clean authored state and restoration on exit.
 
-The camera domain and hidden hardware/WARP workflows passed in Debug. I changed the probe checker before that run's binaries were rebuilt, which caused marker-mismatch failures even though the processes exited correctly. I'm preserving that log and will verify the stricter checker against rebuilt, committed source during packaging.
+The camera domain and hidden hardware/WARP workflows passed in Debug. I changed the probe checker before that run’s binaries were rebuilt, which caused marker-mismatch failures even though the processes exited correctly. I’m preserving that log and will verify the stricter checker against rebuilt, committed source during packaging.
+
+## Assistant final package and audit progress (verbatim)
+
+The camera change is committed as `47e1146`; the headless guard is separate in `dd27573` and `f681b6c`. Packaging is rebuilding the final source and checking displayed/copy runs on NE18NZ2. Its identity will be `2d889e1`; the ready deletion build stays selected until every gate passes.
+
+Both displayed hardware/WARP workflows passed on NE18NZ2, including camera follow/free transitions, reset, routed zoom and editor-view restoration. The package is finishing Release’s strict entry-point probes before Debug and copied-build checks.
+
+Release passed 74/74 with the stricter probes and both displayed runs. Debug’s domain checks and hidden hardware workflow have passed; hidden WARP and the remaining probes are still running. The earlier dialog and checker-mismatch logs remain preserved.
+
+Debug passed 76/76, including the strict checked-iterator, wide-report and entry-point probes. The self-contained copies are now being checked. The guard changes only process-local reporting; no system or security settings were changed.
+
+The camera-follow build is verified and ready at `C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_21-23-08-877_2d889e147159`, source `2d889e14715926fdcd95b0e98ed826e2587b50e6`. Release 74/74, Debug 76/76 and copied hidden/displayed hardware/WARP checks passed. It includes deletion, the heading fix and shared headless guards. I’m finishing the launcher/hash audit and delivery record.
+
+The CMD launcher and frozen-file audit passed: 199 hashes match, all 200 files are read-only, and eight older snapshots are unchanged. The successful displayed runs preserved focus/capture/cursor and recorded zero idle presents. I inspected the camera capture; no test process remains. Next binding: per-mode sidebar scroll restoration.
+
+## Parent headless status and bounded review request (verbatim)
+
+Please give a concise status of the headless guard coverage and test results, including any blocker, then continue. The deletion/heading frozen review found no actionable defect; the reviewer correctly limits its CRT probe claim to the one guarded test process. Keep the wider entry-point audit bounded to preventing test dialogs; camera-follow remains the next feature after this safety correction.
+
+## Assistant status response (verbatim)
+
+The wider headless audit is complete: 29 owned console entries, both application test modes and four fresh nested copies passed bounded, exact-kind failure probes. Camera-follow is also packaged and verified: Release 74/74, Debug 76/76, copied hardware/WARP and the CMD launcher passed. No blocker remains. The independent review cleared the earlier deletion/heading scope; it does not cover this newer guard/camera build.
+
+## Assistant final handoff (verbatim)
+
+Camera-follow and shared headless protection are verified and packaged:
+
+`C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_21-23-08-877_2d889e147159`
+
+RunLatestBuild.cmd selects it. Source: 2d889e14715926fdcd95b0e98ed826e2587b50e6. Camera commit: 47e1146; guards: dd27573 / f681b6c. Deletion and the wrapped-heading fix are included.
+
+Follow preserves orbit/zoom, exact editor views and authored history/clean state. Tests cover Drive/reset/reentry and suspension/resume. Headless probes cover 29 console entries, both application test modes and four fresh nested copies.
+
+Release 74/74, Debug 76/76, copied hardware/WARP and actual CMD launcher checks passed. All 199 hashes match; 200 files are read-only; eight older snapshots are intact. Successful NE18NZ2 runs preserved focus/capture/cursor and recorded zero idle presents. No test process or delivery blocker remains.
+
+Next binding: per-mode sidebar scroll restoration. Physical input/clipboard, actual OS notifications/display association and electrical power remain unverified. References are unchanged; all new commits remain local.
+
+Earlier dialog and checker-mismatch evidence is preserved. The dialog's monitor/focus effect remains unknown; the new guard probes passed. Independent review cleared the earlier deletion/heading scope only.

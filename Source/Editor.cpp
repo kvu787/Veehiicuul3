@@ -57,22 +57,23 @@ void Editor::TrackEdit(const std::function<void()>& operation)
     try { operation(); ValidateTrackProject(track,false); }
     catch(...) { track=std::move(previous); throw; }
     if(trackUndo_.size()>=128) trackUndo_.erase(trackUndo_.begin());
-    trackUndo_.push_back(std::move(previous)); trackRedo_.clear(); generated.reset();
+    trackUndo_.push_back({std::move(previous),false}); trackRedo_.clear(); generated.reset();
 }
 bool Editor::CanUndo(bool redo) const { return mode==EditorMode::ModelBuilder ? !(redo ? modelRedo_ : modelUndo_).empty() : mode==EditorMode::TrackBuilder && !(redo ? trackRedo_ : trackUndo_).empty(); }
-void Editor::Undo(bool redo)
+bool Editor::Undo(bool redo)
 {
-    if(!CanUndo(redo)) return;
+    if(!CanUndo(redo)) return false;
     if(mode==EditorMode::ModelBuilder)
     {
         auto& from=redo ? modelRedo_ : modelUndo_; auto& to=redo ? modelUndo_ : modelRedo_;
-        to.push_back(model); model=std::move(from.back()); from.pop_back();
+        to.push_back(model); model=std::move(from.back()); from.pop_back(); return true;
     }
     else
     {
         auto& from=redo ? trackRedo_ : trackUndo_; auto& to=redo ? trackUndo_ : trackRedo_;
-        const bool sameGeometry=SameTrackGeometry(track.track,from.back().track);
-        to.push_back(track); track=std::move(from.back()); from.pop_back(); if(!sameGeometry) generated.reset();
+        const bool sameGeometry=SameTrackGeometry(track.track,from.back().project.track),materialOnly=from.back().materialOnly;
+        to.push_back({track,materialOnly}); track=std::move(from.back().project); from.pop_back(); if(!sameGeometry) generated.reset();
+        return !materialOnly;
     }
 }
 void Editor::AddShape(int kind)
@@ -128,8 +129,20 @@ bool Editor::EndOutlineColor(bool cancel)
     if(!colorStart_) return false;
     const bool changed=!cancel && track.track.outlines.at(static_cast<size_t>(colorOutline_)).colorSrgb!=colorStart_->track.outlines.at(static_cast<size_t>(colorOutline_)).colorSrgb;
     if(cancel) track=std::move(*colorStart_);
-    else if(changed) { if(trackUndo_.size()>=128) trackUndo_.erase(trackUndo_.begin()); trackUndo_.push_back(std::move(*colorStart_)); trackRedo_.clear(); }
+    else if(changed) { if(trackUndo_.size()>=128) trackUndo_.erase(trackUndo_.begin()); trackUndo_.push_back({std::move(*colorStart_),true}); trackRedo_.clear(); }
     colorStart_.reset(); colorOutline_=-1; return changed;
+}
+bool Editor::SetOutlineDegree(double value)
+{
+    if(colorStart_) throw std::invalid_argument("Finish or cancel the outline color gesture before changing degree.");
+    if(mode!=EditorMode::TrackBuilder || outline<0 || static_cast<size_t>(outline)>=track.track.outlines.size()) throw std::invalid_argument("Select a track outline to edit its degree.");
+    const auto& original=track.track.outlines[static_cast<size_t>(outline)];
+    if(!std::isfinite(value) || value!=std::floor(value) || value<1 || value>Racing2D::MaximumNurbsDegree || value>=static_cast<double>(original.controls.size())) throw std::invalid_argument("Degree must be an integer from 1 to 3 and below the control-point count.");
+    const auto degree=static_cast<unsigned>(value); if(degree==original.degree) return false;
+    auto next=original; next.degree=degree; Racing2D::MakeUniformKnots(next);
+    (void)Racing2D::Tessellate(next); // Validate the periodic seam before touching authored state/history.
+    TrackEdit([&] { track.track.outlines[static_cast<size_t>(outline)]=std::move(next); });
+    return true;
 }
 void Editor::Mode(EditorMode next)
 {

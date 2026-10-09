@@ -20,6 +20,7 @@ enum Id { ModeMenu=1,FileMenu,UndoAction,RedoAction,FrameAction,CageAction,QuitA
     Speed=2300,PreviewLevel,EditStep,SpawnX=3000,SpawnY,SpawnHeading,VehicleScale,PointX,PointY,PointWeight,DecorX,DecorY,DecorHeading,DecorHeight,DecorScale,DeadzoneX,DeadzoneY };
 constexpr int ObjectFirst=1000,MaterialFirst=1100,OutlineFirst=1200,PointFirst=1300,DecorFirst=1400,SliderFirst=2000,PaintFirst=2100,TransformFirst=2200;
 constexpr int OutlineColorFirst=3100,OutlineColorSliderFirst=3110;
+constexpr int OutlineDegree=3120;
 bool OutlineColorSlider(int id) { return id>=OutlineColorSliderFirst && id<OutlineColorSliderFirst+3; }
 std::wstring Wide(const std::string& s)
 {
@@ -77,8 +78,9 @@ LRESULT CALLBACK App::Procedure(HWND window,UINT message,WPARAM wparam,LPARAM lp
 }
 void App::Change(bool mesh)
 {
-    meshDirty_=meshDirty_ || mesh; overlayDirty_=true; schedule_.dirty=true;
+    meshDirty_=meshDirty_ || mesh; overlayDirty_=true; Redraw();
 }
+void App::Redraw() { schedule_.dirty=true; }
 void CALLBACK App::CloakChanged(HWINEVENTHOOK,DWORD,HWND window,LONG object,LONG,DWORD,DWORD)
 {
     if(window && object==OBJID_WINDOW) PostMessageW(window,Renderer::VisibilityMessage,0,0);
@@ -160,6 +162,8 @@ void App::Interface()
         if(editor_.outline>=0 && static_cast<size_t>(editor_.outline)<editor_.track.track.outlines.size())
         {
             const auto& curve=editor_.track.track.outlines[static_cast<size_t>(editor_.outline)];
+            label(L"Degree changes shape; resets knots.");
+            number(OutlineDegree,L"NURBS degree",curve.degree,1,static_cast<double>(std::min<size_t>(Racing2D::MaximumNurbsDegree,curve.controls.size()-1)));
             label(L"Surface color (unlit sRGB)");
             const wchar_t* names[]={L"Red",L"Green",L"Blue"};
             for(int i=0;i<3;++i)
@@ -190,7 +194,7 @@ void App::Interface()
     {
         const float x=menu_==1 ? 12.f : 137.f; float my=60;
         auto popup=[&](int id,const wchar_t* name,bool enabled=true,bool selected=false) { Ui::Control c; c.id=id; c.kind=Ui::Kind::Button; c.rect={x,my,340,42}; c.clip=all; c.text=name; c.enabled=enabled; c.selected=selected; ui_.Add(c,false); my+=44; };
-        if(menu_==1) { popup(ModelMode,L"Model builder",true,editor_.mode==EditorMode::ModelBuilder); popup(TrackMode,L"Track builder",true,editor_.mode==EditorMode::TrackBuilder); popup(DriveMode,L"Drive",true,editor_.mode==EditorMode::Drive); }
+        if(menu_==1) { popup(ModelMode,L"Model builder",true,editor_.mode==EditorMode::ModelBuilder); popup(TrackMode,L"Track builder",true,editor_.mode==EditorMode::TrackBuilder); popup(DriveMode,L"Drive",editor_.generated.has_value(),editor_.mode==EditorMode::Drive); }
         else { const bool model=editor_.mode==EditorMode::ModelBuilder,editing=editor_.mode!=EditorMode::Drive; popup(NewCar,L"New SlopeCar",model); popup(NewPrimitive,L"New primitive scene",model); popup(OpenProject,L"Open...",editing); popup(SaveFile,L"Save",editing); popup(SaveAs,L"Save as...",editing); popup(ExportFile,L"Export C++ mesh...",model); }
     }
 }
@@ -211,7 +215,7 @@ void App::Actions(const std::vector<Ui::Action>& actions)
             else if(editor_.EndPaint(cancel)) modifiedModel_=true;
             POINT point{}; bool restore=!options_.hidden && !options_.smoke;
             try { point=SliderPoint(); } catch(const std::invalid_argument&) { restore=false; }
-            slider_=0; relative_.End(point,restore); if(color) schedule_.dirty=true; else Change(false);
+            slider_=0; relative_.End(point,restore); if(color) Redraw(); else Change(false);
         }
         else Command(a.id,a.value);
     }
@@ -233,12 +237,18 @@ void App::Mode(EditorMode mode)
 void App::Command(int id,double value)
 {
     menu_=(id==ModeMenu) ? (menu_==1 ? 0 : 1) : (id==FileMenu) ? (menu_==2 ? 0 : 2) : 0;
-    if(id==ModeMenu || id==FileMenu) { Change(false); return; }
+    if(id==ModeMenu || id==FileMenu) { Redraw(); return; }
     if(id==ModelMode || id==TrackMode || id==DriveMode) { Mode(id==ModelMode ? EditorMode::ModelBuilder : id==TrackMode ? EditorMode::TrackBuilder : EditorMode::Drive); return; }
     if(id==QuitAction) { PostMessageW(window_,WM_CLOSE,0,0); return; }
     if(id==FrameAction || id==FrameSelectedAction) { editor_.Frame(id==FrameSelectedAction); Change(false); return; }
     if(id==CageAction) { editor_.cage=!editor_.cage; Change(false); return; }
-    if(id==UndoAction || id==RedoAction) editor_.Undo(id==RedoAction);
+    if(id==UndoAction || id==RedoAction)
+    {
+        if(!editor_.CanUndo(id==RedoAction)) { Redraw(); return; }
+        const bool geometry=editor_.Undo(id==RedoAction);
+        if(editor_.mode==EditorMode::ModelBuilder) modifiedModel_=true; else modifiedTrack_=true;
+        if(geometry) Change(); else Redraw(); return;
+    }
     else if(id==OpenProject || id==SaveFile || id==SaveAs || id==ExportFile) { File(id); return; }
     else if(id==NewCar || id==NewPrimitive) { editor_.ModelEdit([&] { editor_.model.scene=id==NewCar ? MakeSlopeCarScene() : Scene{}; editor_.model.selection={SelectionMode::Object,0,-1,{},0}; }); modelPath_.clear(); editor_.Frame(); }
     else if(id>=ObjectFirst && id<ObjectFirst+32) { editor_.model.selection={SelectionMode::Object,id-ObjectFirst,-1,{},0}; Change(false); return; }
@@ -252,10 +262,20 @@ void App::Command(int id,double value)
     else if(id==PreviewLevel) { if(value!=std::floor(value)) throw std::invalid_argument("Preview level must be an integer."); editor_.ModelEdit([&] { editor_.Object().subdivisionLevel=static_cast<unsigned>(value); }); }
     else if(id==EditStep) { editor_.step=static_cast<float>(value); Change(false); return; }
     else if(id==Speed) { ValidateDragSpeed(value); editor_.model.scene.sliderDragSpeed=value; modifiedModel_=true; Change(false); return; }
+    else if(id==OutlineDegree)
+    {
+        if(editor_.SetOutlineDegree(value))
+        {
+            modifiedTrack_=true; Change();
+            status_=L"Degree changed: knots reset to uniform periodic spacing; control points/weights kept. Shape changed; build surfaces before Drive.";
+        }
+        else { Redraw(); status_=L"Degree unchanged; existing knots preserved."; }
+        return;
+    }
     else if(id>=OutlineColorFirst && id<OutlineColorFirst+3)
     {
         editor_.PreviewOutlineColor(static_cast<unsigned>(id-OutlineColorFirst),value);
-        if(editor_.EndOutlineColor()) modifiedTrack_=true; schedule_.dirty=true; return;
+        if(editor_.EndOutlineColor()) modifiedTrack_=true; Redraw(); return;
     }
     else if(id>=PaintFirst && id<PaintFirst+8) { editor_.PreviewPaint(static_cast<PaintParameter>(id-PaintFirst),value); editor_.EndPaint(); Change(false); modifiedModel_=true; return; }
     else if(id>=TransformFirst && id<TransformFirst+7)
@@ -472,7 +492,7 @@ void App::Abort(bool restore)
     if(modelDrag_) editor_.model=dragStart_; if(trackDrag_) editor_.track=trackStart_;
     modelDrag_=trackDrag_=orbit_=pan_=false; held_.fill(false);
     if(!options_.hidden && !options_.smoke && GetCapture()==window_) ReleaseCapture();
-    Change(changedGeometry);
+    if(changedGeometry) Change(); else Redraw();
 }
 void App::RawMouse(HRAWINPUT input)
 {
@@ -494,7 +514,7 @@ void App::DragSlider(LONG counts)
     const auto* c=ui_.Find(slider_); if(!c) throw std::invalid_argument("Slider is no longer available.");
     const bool color=OutlineColorSlider(slider_); const auto p=static_cast<PaintParameter>(slider_-(color ? OutlineColorSliderFirst : SliderFirst));
     const auto value=DraggedValue(SliderValue(),counts,c->rect.w-16,editor_.model.scene.sliderDragSpeed,color ? PaintRange{0,1,10000} : ParameterRange(p));
-    if(color) { editor_.PreviewOutlineColor(static_cast<unsigned>(slider_-OutlineColorSliderFirst),value); schedule_.dirty=true; }
+    if(color) { editor_.PreviewOutlineColor(static_cast<unsigned>(slider_-OutlineColorSliderFirst),value); Redraw(); }
     else { editor_.PreviewPaint(p,value); Change(false); }
 }
 void App::Pointer(UINT message,float x,float y,WPARAM buttons)
@@ -503,7 +523,7 @@ void App::Pointer(UINT message,float x,float y,WPARAM buttons)
     if(message==WM_LBUTTONDOWN)
     {
         Actions(ui_.Down(x,y));
-        if(ui_.capture || ui_.Editing()) { if(ui_.capture && !relative_.Active() && !options_.smoke && !options_.hidden) SetCapture(window_); Change(false); return; }
+        if(ui_.capture || ui_.Editing()) { if(ui_.capture && !relative_.Active() && !options_.smoke && !options_.hidden) SetCapture(window_); Redraw(); return; }
         menu_=0;
         if(!view_.Contains(x,y)) return;
         x-=view_.x; y-=view_.y;
@@ -526,10 +546,11 @@ void App::Pointer(UINT message,float x,float y,WPARAM buttons)
     }
     else if(message==WM_LBUTTONUP)
     {
+        const bool changedGeometry=modelDrag_ || trackDrag_;
         Actions(ui_.Up(x,y));
         if(modelDrag_) { const auto result=editor_.model; editor_.model=dragStart_; modelDrag_=false; editor_.ModelEdit([&] { editor_.model=result; }); modifiedModel_=true; }
         if(trackDrag_) { const auto result=editor_.track; editor_.track=trackStart_; trackDrag_=false; editor_.TrackEdit([&] { editor_.track=result; }); modifiedTrack_=true; }
-        orbit_=pan_=false; if(!options_.smoke && !options_.hidden && GetCapture()==window_) ReleaseCapture(); Change();
+        orbit_=pan_=false; if(!options_.smoke && !options_.hidden && GetCapture()==window_) ReleaseCapture(); if(changedGeometry) Change(); else Redraw();
     }
     else if(message==WM_RBUTTONDOWN || message==WM_MBUTTONDOWN)
     {
@@ -551,7 +572,7 @@ void App::Pointer(UINT message,float x,float y,WPARAM buttons)
             try { ValidateScene(editor_.model.scene); } catch(...) { editor_.model=dragStart_; } Change();
         }
         else if(trackDrag_) { auto& point=editor_.track.track.outlines.at(static_cast<size_t>(editor_.outline)).controls.at(static_cast<size_t>(editor_.point)); point.position=Ground(x-view_.x,y-view_.y); editor_.generated.reset(); Change(); }
-        else if(ui_.Move(x,y)) Change(false);
+        else if(ui_.Move(x,y)) Redraw();
         previousX_=x; previousY_=y;
     }
 }
@@ -568,7 +589,7 @@ void App::Key(UINT key)
             const auto selection=ui_.Selected(); if(!selection.empty() && OpenClipboard(window_)) { const auto bytes=(selection.size()+1)*sizeof(wchar_t); auto memory=GlobalAlloc(GMEM_MOVEABLE,bytes); if(memory) { if(auto* data=GlobalLock(memory)) { std::memcpy(data,selection.c_str(),bytes); GlobalUnlock(memory); EmptyClipboard(); if(!SetClipboardData(CF_UNICODETEXT,memory)) GlobalFree(memory); } else GlobalFree(memory); } CloseClipboard(); if(key=='X') ui_.Erase(true); }
         }
         else if(ctrl && key=='V' && OpenClipboard(window_)) { auto handle=GetClipboardData(CF_UNICODETEXT); if(handle) { const auto* data=static_cast<const wchar_t*>(GlobalLock(handle)); if(data) { const auto bound=GlobalSize(handle)/sizeof(wchar_t); size_t length=0; while(length<bound && length<128 && data[length]) ++length; ui_.Replace(std::wstring(data,length)); GlobalUnlock(handle); } } CloseClipboard(); }
-        Change(false); return;
+        Redraw(); return;
     }
     if(ctrl && (key=='Z' || key=='Y')) Command(key=='Y' ? RedoAction : UndoAction);
     else if(ctrl && key=='S') File(SaveFile);
@@ -731,7 +752,7 @@ void App::TestWorkflow()
     Command(NewPrimitive); Command(CopyPaint); editor_.model.selection.mode=SelectionMode::Face; editor_.model.selection.face=0; Command(AssignPaint); Command(PaintFirst,.7); Command(ExtrudeAction); Command(RefineAction);
     SaveScene(editor_.model.scene,options_.session/"TwoPaint.modeler"); ExportMesh(editor_.model.scene,options_.session/"TwoPaint.h");
     const auto authored=SerializeScene(editor_.model.scene); Draw(!options_.hidden); renderer_.Capture(options_.session/"Model2560x1440.bmp");
-    Mode(EditorMode::TrackBuilder); TestTrackColors(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
+    Mode(EditorMode::TrackBuilder); TestTrackColors(); TestTrackDegrees(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
     SaveTrack(editor_.track,options_.session/"ExampleCircuit.track");
     Mode(EditorMode::Drive); for(int i=0;i<120;++i) { Tick(1./120,true); if(i%30==0) Draw(!options_.hidden); }
     Draw(!options_.hidden); renderer_.Capture(options_.session/"Drive2560x1440.bmp");
@@ -785,7 +806,12 @@ void App::TestTrackColors()
     edit(1,L".99",true); Require(!modifiedTrack_ && SerializeTrack(editor_.track)==clean,"Numeric RGB cancel changed clean authoring.");
     edit(1,L"2"); Require(ui_.invalid && !modifiedTrack_ && SerializeTrack(editor_.track)==clean,"Invalid numeric RGB value was accepted."); Key(VK_ESCAPE);
     const auto geometry=editor_.generated->surfaces[0].data();
-    auto begin=[&](int channel) { const auto r=reveal(OutlineColorSliderFirst+channel); Actions(ui_.Down(r.x+8,r.y+4)); Require(relative_.Active(),"RGB slider did not share relative pointer ownership."); };
+    auto begin=[&](int channel) {
+        const auto r=reveal(OutlineColorSliderFirst+channel),image=presentation_.Image();
+        Message(WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(static_cast<SHORT>(r.x+8+image.x),static_cast<SHORT>(r.y+4+image.y)));
+        Require(relative_.Active(),"RGB slider did not share routed relative pointer ownership.");
+    };
+    auto release=[&] { Message(WM_LBUTTONUP,0,MAKELPARAM(0,0)); };
     Draw(!options_.hidden); const auto revision=geometry_.revision;
     begin(0); DragSlider(100000); Draw(!options_.hidden);
     Require(editor_.track.track.outlines[0].colorSrgb[0]==1,"RGB drag did not reach exact unlit white.");
@@ -793,11 +819,14 @@ void App::TestTrackColors()
     Require(shown_.objects[0].materialKind==MaterialKind::UnlitGround && surfaces_[0]==CompileSurfaceMaterial(shown_.objects[0]),"RGB preview did not update the explicit unlit material.");
     Actions(ui_.Cancel()); Draw(!options_.hidden);
     Require(!modifiedTrack_ && SerializeTrack(editor_.track)==clean && pointerPlatform_.SimulatedClean() && geometry_.revision==revision,"RGB slider cancel changed clean state, rebuilt geometry or leaked ownership.");
-    begin(0); DragSlider(-100000); Actions(ui_.Up(0,0));
+    begin(0); DragSlider(-100000); release(); Draw(!options_.hidden);
     Require(modifiedTrack_ && editor_.track.track.outlines[0].colorSrgb[0]==0,"RGB relative drag commit failed or bypassed unsaved warning.");
-    Command(UndoAction); Require(SerializeTrack(editor_.track)==clean && editor_.generated->surfaces[0].data()==geometry,"RGB gesture undo lost color or built geometry.");
-    Command(RedoAction); Require(editor_.track.track.outlines[0].colorSrgb[0]==0 && editor_.generated->surfaces[0].data()==geometry,"RGB redo lost color or built geometry.");
-    SaveTrackProject(path); begin(0); Actions(ui_.Up(0,0)); Require(!modifiedTrack_,"Unchanged RGB drag marked a clean track unsaved.");
+    Require(geometry_.revision==revision && shown_.objects[0].unlitColorSrgb[0]==0 && surfaces_[0]==CompileSurfaceMaterial(shown_.objects[0]),"Routed RGB pointer release rebuilt geometry or left stale constants.");
+    Command(UndoAction); Draw(!options_.hidden);
+    Require(SerializeTrack(editor_.track)==clean && editor_.generated->surfaces[0].data()==geometry && geometry_.revision==revision && shown_.objects[0].unlitColorSrgb[0]==.17 && surfaces_[0]==CompileSurfaceMaterial(shown_.objects[0]),"RGB undo/draw lost color, rebuilt rendering geometry or left stale constants.");
+    Command(RedoAction); Draw(!options_.hidden);
+    Require(editor_.track.track.outlines[0].colorSrgb[0]==0 && editor_.generated->surfaces[0].data()==geometry && geometry_.revision==revision && shown_.objects[0].unlitColorSrgb[0]==0 && surfaces_[0]==CompileSurfaceMaterial(shown_.objects[0]),"RGB redo/draw lost color, rebuilt rendering geometry or left stale constants.");
+    SaveTrackProject(path); begin(0); release(); Require(!modifiedTrack_,"Unchanged RGB drag marked a clean track unsaved.");
     Command(OutlineColorFirst+2,.22); const auto dirty=SerializeTrack(editor_.track); begin(1); DragSlider(100000); Actions(ui_.Cancel());
     Require(modifiedTrack_ && SerializeTrack(editor_.track)==dirty,"RGB cancel cleared previously committed unsaved changes.");
     SaveTrackProject(path);
@@ -823,7 +852,45 @@ void App::TestTrackColors()
     Mode(EditorMode::Drive); Tick(.02,true); Mode(EditorMode::TrackBuilder);
     Require(SerializeTrack(editor_.track)==dirty && SerializeScene(editor_.model.scene)==model && SerializeScene(editor_.track.vehicle)==vehicle,"RGB Drive transition mutated track or SimplePaint assets.");
     reveal(OutlineColorFirst); Draw(!options_.hidden); renderer_.Capture(options_.session/"OutlineColors2560x1440.bmp");
-    std::ofstream(options_.session/"OutlineColorVerification.txt")<<"Numeric scientific/invalid/cancel/no-op and relative drag commit/cancel/capture/focus-loss passed\nClipped RGB release/Escape cursor restore: 1-4 pixel intersections passed\nClean saved/reloaded and previously dirty state preserved\nRGB gesture preview/cancel added no geometry revision\nBuilt geometry retained across RGB undo/redo and Drive\nExplicit unlit RGB material retained; model/vehicle SimplePaint unchanged\nPhysical raw mouse delivery: pending\n";
+    std::ofstream(options_.session/"OutlineColorVerification.txt")<<"Numeric scientific/invalid/cancel/no-op and relative drag commit/cancel/capture/focus-loss passed\nClipped RGB release/Escape cursor restore: 1-4 pixel intersections passed\nClean saved/reloaded and previously dirty state preserved\nRGB gesture preview/cancel added no geometry revision\nRouted client-message release and post-undo/redo draws: unchanged rendering geometry revision, updated constants\nBuilt geometry retained across RGB undo/redo and Drive\nExplicit unlit RGB material retained; model/vehicle SimplePaint unchanged\nPhysical raw mouse delivery: pending\n";
+    trackPath_.clear();
+}
+void App::TestTrackDegrees()
+{
+    Command(ExampleTrack); editor_.outline=0; editor_.point=4;
+    editor_.TrackEdit([&] { auto& curve=editor_.track.track.outlines[0]; curve.controls[0].weight=.81; for(auto& knot:curve.knots) knot=20+2*knot; }); editor_.BuildTrack(); Change();
+    const auto path=options_.session/"OutlineDegree.track"; SaveTrackProject(path);
+    const auto original=SerializeTrack(editor_.track),model=SerializeScene(editor_.model.scene); const auto geometry=editor_.generated->surfaces[0].data();
+    auto key=[&](UINT value) { SendMessageW(window_,WM_KEYDOWN,value,0); SendMessageW(window_,WM_KEYUP,value,0); };
+    auto edit=[&](const wchar_t* value,bool cancel=false) {
+        Interface(); auto* c=ui_.Find(OutlineDegree); Require(c!=nullptr,"Degree numeric control missing.");
+        ui_.scroll+=c->rect.y-ui_.panel.y; Interface(); c=ui_.Find(OutlineDegree);
+        const auto r=Ui::Intersect(c->rect,c->clip),image=presentation_.Image();
+        const auto position=MAKELPARAM(static_cast<SHORT>(r.x+8+image.x),static_cast<SHORT>(r.y+4+image.y));
+        Message(WM_LBUTTONDOWN,MK_LBUTTON,position); Message(WM_LBUTTONUP,0,position); ui_.Replace(value); key(cancel ? VK_ESCAPE : VK_RETURN);
+    };
+    Draw(!options_.hidden); const auto revision=geometry_.revision;
+    edit(L"3"); Draw(!options_.hidden);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==original && editor_.generated->surfaces[0].data()==geometry && geometry_.revision==revision,"No-op degree edit reset custom knots, dirtied state or rebuilt geometry.");
+    edit(L"2",true); Require(!modifiedTrack_ && SerializeTrack(editor_.track)==original,"Canceled degree text changed clean authoring.");
+    for(const wchar_t* invalid:{L"0",L"4",L"1.5"})
+    {
+        edit(invalid); Require(!modifiedTrack_ && SerializeTrack(editor_.track)==original && editor_.generated->surfaces[0].data()==geometry,"Invalid routed degree edit was not atomic."); key(VK_ESCAPE);
+    }
+    edit(L"2e0"); const auto changed=SerializeTrack(editor_.track);
+    Require(modifiedTrack_ && !editor_.generated && editor_.track.track.outlines[0].degree==2 && editor_.point==4 && status_.find(L"Shape changed")!=std::wstring::npos,"Degree commit failed, kept stale surfaces or hid its shape-change consequence.");
+    Command(ModeMenu); Interface(); Require(ui_.Find(DriveMode) && !ui_.Find(DriveMode)->enabled,"Drive menu remained enabled with stale degree geometry."); Command(ModeMenu);
+    bool blocked=false; try { Mode(EditorMode::Drive); } catch(const std::invalid_argument&) { blocked=true; }
+    Require(blocked && editor_.mode==EditorMode::TrackBuilder && SerializeTrack(editor_.track)==changed,"Drive accepted unbuilt degree geometry or changed authored state on rejection.");
+    Draw(!options_.hidden); Require(geometry_.revision>revision,"Degree geometry change was classified as material-only.");
+    Command(UndoAction); Draw(!options_.hidden); Require(modifiedTrack_ && SerializeTrack(editor_.track)==original && !editor_.generated,"Degree undo lost original authored knots or dirty state.");
+    Command(RedoAction); Require(SerializeTrack(editor_.track)==changed && !editor_.generated,"Degree redo failed or reused stale surfaces.");
+    SaveTrackProject(path); Command(OutlineColorFirst,.11); OpenTrackProject(path);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==changed && editor_.generated.has_value(),"Degree save/reload failed through production project paths.");
+    Mode(EditorMode::Drive); Tick(.02,true); Mode(EditorMode::TrackBuilder);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==changed && SerializeScene(editor_.model.scene)==model,"Rebuilt degree Drive transition changed clean authored state.");
+    ui_.scroll=800; Draw(!options_.hidden); renderer_.Capture(options_.session/"OutlineDegree2560x1440.bmp");
+    std::ofstream(options_.session/"OutlineDegreeVerification.txt")<<"Routed numeric no-op/cancel/invalid/fractional/scientific degree editing passed\nNo-op retained noncanonical periodic knots and rendering geometry revision\nDegree commit changed shape, regenerated uniform periodic knots, preserved controls/weights/colors/assets/placements\nGeometry invalidated; Drive disabled/rejected until successful surface build\nUndo/redo and clean save/reload/rebuilt Drive passed\nPhysical input and real display association: pending\n";
     trackPath_.clear();
 }
 void App::TestUiTransactions()

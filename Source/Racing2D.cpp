@@ -83,7 +83,7 @@ void MakeUniformKnots(NurbsOutline& curve)
 void ValidateCurve(const NurbsOutline& curve)
 {
     Require(!curve.name.empty() && curve.name.size()<=128,"Outline names need 1 to 128 characters.");
-    Require(curve.degree>=1 && curve.degree<=3,"This slice supports closed NURBS degree 1, 2 or 3.");
+    Require(curve.degree>=1 && curve.degree<=MaximumNurbsDegree,"This slice supports closed NURBS degree 1, 2 or 3.");
     Require(curve.controls.size()>curve.degree && curve.controls.size()<=64,"An outline needs degree+1 to 64 weighted control points.");
     Require(curve.knots.size()==curve.controls.size()+2*curve.degree+1,"Invalid periodic NURBS knot count.");
     for(auto p:curve.controls) Require(Finite(p.position) && std::isfinite(p.weight) && p.weight>=.01 && p.weight<=100,"Control positions must be finite; weights must be in [0.01,100].");
@@ -101,7 +101,7 @@ Point Evaluate(const NurbsOutline& curve,double parameter)
     const auto found=std::upper_bound(curve.knots.begin()+p,curve.knots.begin()+n+p+1,u);
     const auto span=static_cast<size_t>(found-curve.knots.begin()-1);
     struct Homogeneous { Point xy; double w; };
-    std::array<Homogeneous,4> d{};
+    std::array<Homogeneous,MaximumNurbsDegree+1> d{};
     for(unsigned j=0;j<=p;++j) { const auto& c=curve.controls[(span-p+j)%n]; d[j]={c.position*c.weight,c.weight}; }
     for(unsigned r=1;r<=p;++r) for(unsigned j=p;j>=r;--j)
     {

@@ -8,6 +8,7 @@
 // This module has no renderer, window, mesh, or spatial 3D dependencies.
 namespace Racing2D
 {
+inline constexpr unsigned MaximumNurbsDegree=3;
 struct Point
 {
     double x=0,y=0;

@@ -27,6 +27,7 @@ private:
     void Actions(const std::vector<Ui::Action>& actions);
     void Command(int id,double value=0);
     void Change(bool mesh=true);
+    void Redraw();
     void Mode(EditorMode mode);
     void Geometry();
     void Overlay();
@@ -48,6 +49,7 @@ private:
     void SaveTrackProject(const std::filesystem::path& path);
     void OpenTrackProject(const std::filesystem::path& path);
     void TestTrackColors();
+    void TestTrackDegrees();
     void TestUiTransactions();
     void TestProductionLoop();
     void TestWorkflow();

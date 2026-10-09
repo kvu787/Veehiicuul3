@@ -30,7 +30,7 @@ public:
     Vector3 Center() const;
     void ModelEdit(const std::function<void()>& operation);
     void TrackEdit(const std::function<void()>& operation);
-    void Undo(bool redo);
+    bool Undo(bool redo); // True when rendering geometry must be rebuilt; color history returns false.
     bool CanUndo(bool redo) const;
     void AddShape(int kind);
     void Refine();
@@ -45,6 +45,7 @@ public:
     void BeginOutlineColor();
     void PreviewOutlineColor(unsigned channel,double value);
     bool EndOutlineColor(bool cancel=false);
+    bool SetOutlineDegree(double value);
     void Mode(EditorMode next);
     void BuildTrack();
     void NewTrack(bool example);
@@ -54,7 +55,8 @@ public:
     void Frame(bool selected=false);
 private:
     std::vector<ModelState> modelUndo_,modelRedo_;
-    std::vector<TrackProject> trackUndo_,trackRedo_;
+    struct TrackHistory { TrackProject project; bool materialOnly=false; };
+    std::vector<TrackHistory> trackUndo_,trackRedo_;
     std::optional<ModelState> paintStart_;
     std::optional<TrackProject> colorStart_;
     int colorOutline_=-1;

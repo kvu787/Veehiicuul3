@@ -27,8 +27,8 @@ int main()
         Require(SerializeScene(e.model.scene)==model && SerializeScene(e.track.vehicle)==vehicle && e.track.vehicle.objects[0].materialKind==MaterialKind::SimplePaint,"Track RGB changed source model/vehicle paint.");
         e.BeginOutlineColor(); Require(!e.EndOutlineColor(),"Unchanged color gesture reported an edit.");
         e.PreviewOutlineColor(0,.91); Require(!e.EndOutlineColor(),"Equal RGB value reported an edit.");
-        e.Undo(false); Require(SerializeTrack(e.track)==original && e.generated->surfaces[0].data()==geometry,"Single RGB undo failed or invalidated unchanged track geometry.");
-        e.Undo(true); Require(SerializeTrack(e.track)==colored && e.generated->surfaces[0].data()==geometry,"RGB redo failed or invalidated unchanged track geometry.");
+        Require(!e.Undo(false) && SerializeTrack(e.track)==original && e.generated->surfaces[0].data()==geometry,"Single RGB undo failed or requested a geometry rebuild.");
+        Require(!e.Undo(true) && SerializeTrack(e.track)==colored && e.generated->surfaces[0].data()==geometry,"RGB redo failed or requested a geometry rebuild.");
         for(double invalid:{-.01,1.01,std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::infinity()})
         {
             bool rejected=false; try { e.PreviewOutlineColor(0,invalid); } catch(const std::invalid_argument&) { rejected=true; }

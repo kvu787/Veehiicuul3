@@ -47,7 +47,7 @@ if ($VerifyVisible) {
     if ($info.Verification.CopiedVisibleHardware) { $info.Verification.CopiedVisibleWarp = CopyProbe $true $true 'CopyVisibleWarp' }
 }
 $exampleSession = Get-ChildItem -LiteralPath (Join-Path $candidate 'Verification\CopyHardware') -Directory | Select-Object -First 1
-foreach ($file in @('TwoPaint.modeler','TwoPaint.h','ExampleCircuit.track','OutlineColors.track')) { Copy-Item -LiteralPath (Join-Path $exampleSession.FullName $file) -Destination (Join-Path $candidate 'Examples') }
+foreach ($file in @('TwoPaint.modeler','TwoPaint.h','ExampleCircuit.track','OutlineColors.track','OutlineDegree.track')) { Copy-Item -LiteralPath (Join-Path $exampleSession.FullName $file) -Destination (Join-Path $candidate 'Examples') }
 # Actual selector and snapshot launchers run from an unrelated working directory.
 Push-Location $unrelated
 try {

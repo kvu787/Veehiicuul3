@@ -348,3 +348,27 @@ The first test run found a width-boundary case and a clipped-slider test fixture
 The hidden hardware and WARP workflows passed the routed gate tests, including cancellation, undo/redo, save/reload and Drive rejection. The boundary failure was a 1000 m gate rounding to 1000.0000000000001 m; I’ve corrected that calculation without relaxing file validation, and the full rerun is underway.
 
 All 33 noninteractive checks now pass, including hidden hardware/WARP and gate transaction coverage. I’m documenting the recovered V2 behavior and splitting the domain and UI changes into local commits, then I’ll run the displayed and copied-build gates on NE18NZ2.
+
+## Assistant packaging and delivery progress (verbatim)
+
+The local commits are ready: domain `41b5add` and UI `20320f9`. Packaging is checking the committed source, displayed hardware/WARP runs, Debug, and self-contained copies from another directory. Both reference repositories remain unchanged.
+
+All 35 committed-source Release checks passed, including both displayed runs on NE18NZ2. Debug’s domain checks and hidden hardware run have passed; its remaining checks and the frozen-copy gates are still running. Physical input and real display timing remain unverified.
+
+The gate-editing build is verified and ready at `C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_20-17-14-046_0ca275b38da4`, source `0ca275b38da42216d4870708b2f277f139b03cf2`. Release 35/35, Debug 33/33 and copied hidden/displayed hardware/WARP checks passed. RunLatestBuild.cmd now selects it; I’m finishing the CMD-launcher and frozen-file audit.
+
+The actual CMD launcher passed from Temp. All 146 hashes match and all 147 files are read-only; the six older snapshots are intact. Displayed checks preserved foreground, focus, capture and cursor state, and recorded zero idle presents. I inspected the gate UI capture; no test process remains active.
+
+## Assistant final handoff (verbatim)
+
+Selected gate editing is verified and packaged:
+
+`C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_20-17-14-046_0ca275b38da4`
+
+RunLatestBuild.cmd selects it. Source: 0ca275b38da42216d4870708b2f277f139b03cf2. Domain/UI commits: 41b5add / 20320f9. Executable SHA-256: 9ADBCCA180DE7FB9F02868CCED41FAC6B7EF443DFF2192D08638AD1E4B2A8BF7.
+
+The V2 center/degree-heading/width contract now uses existing custom numeric controls with atomic Apply and cancellation. Tests cover invalid drafts, dirty state, exact undo/redo, persistence, gate isolation and Drive readiness while retaining built roads.
+
+Release 35/35, Debug 33/33, copied hidden/displayed hardware/WARP and actual CMD launcher checks passed. All 146 hashes match; 147 files are read-only; six older snapshots remain intact. NE18NZ2 checks preserved foreground/focus/capture/cursor and recorded zero idle presents. No process or delivery blocker remains.
+
+Remaining bindings include selected control-point/gate deletion and camera-follow. Physical input/clipboard, real notifications/display association and electrical power remain unverified. References are unchanged; all new commits remain local.

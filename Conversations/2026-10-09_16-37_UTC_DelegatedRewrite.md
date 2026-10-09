@@ -412,3 +412,23 @@ The non-cardinal full-turn fix is implemented in local commit `25b8c24`. Its dom
 Debug is blocked in the deletion test. I found an insertion expression that briefly advances an iterator past the end before subtracting one—a checked-iterator failure that Release missed. I’m stopping that owned test, correcting the expression, and preventing CRT dialogs in this headless test before rerunning the package.
 
 The corrected deletion test passed in Debug, and the CRT failure probe exited without a dialog. The earlier blocked process had opened a runtime dialog; I stopped only that verified test process, without UI input. Its monitor and focus effect were not recorded, so I won’t claim that incident preserved them.
+
+## Assistant corrected package and ready audit (verbatim)
+
+The full corrected Debug run passed 35/35, including the headless failure probe. I'm rerunning packaging from clean commit `c42529f`. The rejected attempt did not replace the ready build; its evidence is preserved.
+
+The non-cardinal full-turn fix is implemented. The package's Release suite passed 37/37, including deletion and routed UI checks; Debug is finishing with the new headless failure probe already passed. Copied-build verification comes next.
+
+Debug passed 35/35. The self-contained copies are now running the hardware/WARP and launcher checks. Point deletion resets knots and requires rebuilding surfaces; gate deletion retains roads and updates Drive readiness. Both restore the deleted selection on Undo.
+
+The deletion build is verified and ready at `C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_20-55-06-622_c42529f1db5c`, source `c42529f1db5cf2672b3783ae3a054bbafb1122df`. Release 37/37, Debug 35/35 and copied hidden/displayed hardware/WARP checks passed. It includes the wrapped-heading fix. I'm finishing the CMD-launcher and frozen-file audit.
+
+The CMD launcher passed from Temp. All 177 hashes match, all 178 files are read-only, and the seven older snapshots are unchanged. The successful displayed runs preserved focus/capture/cursor and recorded zero idle presents; no test process remains. I inspected both deletion captures. Camera-follow is the next existing mode binding.
+
+## Parent headless entry-point extension (verbatim)
+
+I informed the user of the Debug runtime dialog incident and the unknown monitor/focus effect. Preserve the evidence and keep the failure-probe regression. Please ensure the dialog suppression covers all automated headless test entry points that can invoke this CRT reporting path, with no changes to user security or system settings. Continue verifying the corrected snapshot and keep prior ready builds untouched.
+
+## Assistant entry-point extension progress (verbatim)
+
+The snapshot and rejected-run evidence are preserved. I'll extend the CRT reporting policy to every automated headless entry point, including the application's hidden test mode, then rerun the failure probes and package gates. The policy will stay process-local.

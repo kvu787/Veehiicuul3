@@ -1,11 +1,33 @@
 #include "Editor.h"
 #include <iostream>
 #include <stdexcept>
+#include <cstring>
+#include <cstdlib>
+#ifdef _DEBUG
+#include <crtdbg.h>
+#include <cstdio>
+#endif
 
 void Require(bool value,const char* text) { if(!value) throw std::runtime_error(text); }
 template<class F> void Reject(F operation,const char* text) { try { operation(); } catch(const std::invalid_argument&) { return; } throw std::runtime_error(text); }
-int main()
+int main(int argc,char** argv)
 {
+#ifdef _DEBUG
+    _set_error_mode(_OUT_TO_STDERR);
+    _CrtSetReportMode(_CRT_ASSERT,_CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT,_CRTDBG_FILE_STDERR);
+    _set_abort_behavior(0,_WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    _set_invalid_parameter_handler([](const wchar_t*,const wchar_t*,const wchar_t*,unsigned,uintptr_t) { std::fputs("Headless invalid parameter failure.\n",stderr); std::_Exit(1); });
+#endif
+    if(argc==2 && std::strcmp(argv[1],"--probe-headless-assert")==0)
+    {
+#ifdef _DEBUG
+        _CrtDbgReport(_CRT_ASSERT,"TrackDeletionTests",0,nullptr,"Controlled headless assertion probe.");
+        _invalid_parameter_noinfo_noreturn();
+#else
+        std::_Exit(1);
+#endif
+    }
     try
     {
         Editor e; e.Mode(EditorMode::TrackBuilder); e.NewTrack(true); e.outline=0;
@@ -40,7 +62,7 @@ int main()
         for(int selected:{1,2,3})
         {
             e.gate=selected; e.point=7; const auto gate=e.SelectedGate(); e.DeleteGate();
-            auto expected=e.track; expected.track.checkpoints.insert(expected.track.checkpoints.begin()+selected-1,gate);
+            auto expected=e.track; expected.track.checkpoints.insert(expected.track.checkpoints.begin()+(selected-1),gate);
             Require(SerializeTrack(expected)==original && e.gate==std::min(selected,2) && e.point==7 && e.generated->surfaces[0].data()==surfaces && e.CanDrive(),"Selected checkpoint deletion changed order/unrelated data, selection, cached road or valid Drive.");
             const auto deleted=SerializeTrack(e.track); Require(SerializeTrack(DeserializeTrack(deleted))==deleted,"Deleted checkpoint did not persist exactly.");
             e.Undo(false); Require(SerializeTrack(e.track)==original && e.gate==selected && e.point==7 && e.generated->surfaces[0].data()==surfaces,"Checkpoint undo did not restore exact endpoints/order/selection/road.");

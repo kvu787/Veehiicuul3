@@ -185,7 +185,7 @@ void Editor::DeleteGate()
     if(!CanDeleteGate()) throw std::invalid_argument("Select a placed checkered line/checkpoint; finish/cancel gestures first.");
     TrackEdit([&] {
         if(gate==0) { track.track.hasFinish=false; gate=track.track.checkpoints.empty() ? -1 : 1; }
-        else { track.track.checkpoints.erase(track.track.checkpoints.begin()+gate-1); gate=track.track.checkpoints.empty() ? (track.track.hasFinish ? 0 : -1) : std::min(gate,static_cast<int>(track.track.checkpoints.size())); }
+        else { track.track.checkpoints.erase(track.track.checkpoints.begin()+(gate-1)); gate=track.track.checkpoints.empty() ? (track.track.hasFinish ? 0 : -1) : std::min(gate,static_cast<int>(track.track.checkpoints.size())); }
     },false,true);
 }
 Racing2D::Gate Editor::SelectedGate() const

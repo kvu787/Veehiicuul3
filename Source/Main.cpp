@@ -47,7 +47,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int)
         ValidateDisplay(displays[selected],presentation);
         std::ofstream policy(options.session/"DisplayPolicy.txt");
         policy<<presentation.width<<"x"<<presentation.height<<" DPI "<<presentation.dpiX<<","<<presentation.dpiY<<" origin "<<presentation.originX<<","<<presentation.originY<<" centered offsets "<<presentation.Image().x<<","<<presentation.Image().y;
-        if(options.smoke && !InputDesktopAvailable()) { std::ofstream(options.session/"Skipped.txt")<<"Input desktop locked/unavailable. Visible checks pending."; return 77; }
+        if(options.smoke && !InputDesktopAvailable()) { std::ofstream(options.session/"Skipped.txt")<<"Input desktop locked/unavailable, or this process desktop is not receiving user input. No window opened; visible checks pending."; return 77; }
         App app(instance,displays[selected],presentation,options); return app.Run();
     }
     catch(const std::exception& e)

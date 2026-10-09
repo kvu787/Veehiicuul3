@@ -152,6 +152,10 @@ void ValidateDisplay(const Display& d,const Presentation& p)
 }
 bool InputDesktopAvailable()
 {
+    // A desktop named Default may be isolated from the user's input desktop.
+    // Logical window visibility alone does not establish presentation there.
+    BOOL receivesInput=FALSE; DWORD required=0;
+    if(!GetUserObjectInformationW(GetThreadDesktop(GetCurrentThreadId()),UOI_IO,&receivesInput,sizeof(receivesInput),&required) || !receivesInput) return false;
     const auto desktop=OpenInputDesktop(0,FALSE,DESKTOP_SWITCHDESKTOP);
     if(!desktop) return false;
     wchar_t name[128]{}; DWORD needed=0;

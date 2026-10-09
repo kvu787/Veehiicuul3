@@ -272,3 +272,27 @@ Degree accepts integers 1-3 below control-point count. Changes regenerate unifor
 Release 33/33, Debug 31/31, copied hidden/displayed hardware/WARP and actual CMD launcher checks passed. All 114 hashes match; 115 files are read-only; older snapshots are intact. NE18NZ2 testing preserved foreground/focus/capture. Static idle added zero presents; no test process remains.
 
 No delivery blocker remains. Physical input, real notification/display association and electrical power remain unverified. Next core binding: explicit periodic knot editing. References are unchanged; all new commits are local. The supplied 62 main-room records were archived with three unavailable text records preserved as null.
+
+## Delegated knot milestone (verbatim)
+
+Degree/RGB correction build3438a66dffde delivered user19:24UTC. Continue next existing parity binding: explicit periodic knot editing, using the existing minimal numeric/text controls rather than new framework machinery. First inspect V2's actual knot UI/domain contract so parity is real; expose only a useful bounded workflow, with clear periodic validity constraints and shape-changing semantics. Parse/apply atomically, reject invalid/nonfinite/nonmonotone/incorrect-length or inconsistent periodic vectors without losing prior state, preserve points/weights/materials, support cancel/undo/redo/dirty/save/reload, invalidate geometry when genuinely needed and require rebuild before Drive. Don't implement a general spreadsheet/table/editor framework or unrelated features. Add focused domain and routed UI tests, deliver immutable verified snapshot with known limitations, then identify next core binding. Local commits only; references read-only; NE18NZ2 exclusively for visible tests. Keep locked-machine code/tests moving.
+
+## Assistant knot progress (verbatim)
+
+I'll inspect Veehiicuul2's knot-editing contract, then bind a bounded workflow to the existing custom UI. I'll test atomic rejection, cancellation, undo/redo, persistence and rebuilding before Drive before packaging the next snapshot.
+
+Veehiicuul2 preserves explicit knots in saved tracks and tests a rational circle, but its UI only regenerates uniform knots when degree changes. I'll add the requested vector editor as a bounded authoring feature: one field for the selected outline, atomic Apply/Enter, and validation of the periodic extensions and closed seam.
+
+## Parent bounded review result (verbatim)
+
+The independent review of frozen build 3438a66dffde completed without remaining concrete findings in the degree/RGB scope. It confirmed the routed RGB release and undo/redo geometry-revision regression and degree preservation/validation. Continue the current periodic-knot work; the review did not cover that work in progress.
+
+## Assistant implementation progress (verbatim)
+
+The knot parser and transaction code are in place. It preserves points, weights, colors and placements, validates the periodic vector and seam, and retains built geometry only when every generated boundary point is exactly unchanged. I'm adding routed UI tests; a rejected draft will remain editable.
+
+All 32 noninteractive checks passed, including hidden hardware/WARP runs. Routed tests cover draft retention after rejection, blocked selection clicks, cancellation, undo/redo, save/reload and Drive. They also confirm that equivalent text and exactly unchanged sampled boundaries preserve the rendering geometry revision. I'm preparing the immutable snapshot now.
+
+## Source checkpoint
+
+2b624f9 adds bounded decimal/scientific vector parsing and explicit periodic-extension checks, atomic selected-outline application, exact sampled-boundary reuse and focused domain tests. 3ce76b2 binds the single purpose-specific vector field, shared editing/clip/scroll/caret-window rendering and routed UI tests, with documentation of V2's actual contract. Existing Version 2 reading/persistence behavior is retained. The domain and UI changes are separate reviewable local commits. The following package is gated on committed-source Release/Debug and copied-build verification; the previous ready snapshot stays unchanged until those gates pass.

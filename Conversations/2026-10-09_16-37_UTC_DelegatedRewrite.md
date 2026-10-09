@@ -575,3 +575,53 @@ The [remaining parity inventory](C:/Users/k/Repository/Veehiicuul3/Documentation
 - Physical input/clipboard, OS notifications, display association and power verification.
 
 No test process remains. References are unchanged; all new commits remain local. Independent review cleared the earlier camera/guard build only.
+
+## Delegated continuation and stop, 2026-10-09 (verbatim)
+
+### User continuation delegation
+
+The user explicitly confirmed continuing Veehiicuul3 development at 22:48 UTC. Resume work on V3 only; the old reference repositories remain stopped/read-only. First correct the publication state: LatestReady must identify the last fully verified camera build until a candidate passes the actual CMD launcher gate. Preserve the immutable scroll candidate and failure logs. Diagnose the repeatable DXGI_STATUS_OCCLUDED launcher result without weakening strict S_OK acceptance, hiding failures, changing display/OS settings or testing on other monitors. Compare the actual launcher process/window/show-state and copied test paths. Verify the fix through the real CMD launcher from an unrelated directory and publish a new immutable snapshot only after every gate passes, with promotion occurring last. Then continue existing parity from Documentation/Parity.md, prioritizing actual V2 workflow gaps and minimal controls. Keep all commits local, never push. Visible tests exclusively NE18NZ2; keep code/noninteractive work moving if locked. Report the verified build and any remaining blocker promptly.
+
+<transcript_evidence>
+User, 2026-10-09 22:48 UTC, message Sentinel_d6d9018c13788191a055a013f8d00f95: continue development
+</transcript_evidence>
+
+### Assistant commentary
+
+I'll restore LatestReady to the camera build, preserve the scroll snapshot and failure logs, then compare the CMD launch and copied-test window state. I'll keep the S_OK gate strict and test only on NE18NZ2.
+
+LatestReady now points to the previously verified camera build. The scroll snapshot and failure logs remain intact. The key difference to investigate is launch context: copied tests passed with explicit logs, while the CMD path failed after the window was shown. I'll compare those paths under the same conditions.
+
+### User review steering delegation
+
+The independent frozen-scroll review found no concrete scroll defect and confirmed two launch-gate defects: P1 PublishBuild.ps1 sets Ready and LatestReady from copied displayed checks before the real CMD gate; add a forced-launcher-failure regression proving prior pointer preservation. P2 RunLatestBuild.cmd and snapshot wrapper unconditionally pause on failure; automated modes must exit boundedly with the original failure code, without UI input. Evidence shows the older camera binary also returned occlusion, so do not call this a scroll regression. Failed CMD sessions did not reach final idle/focus checks. Keep the underlying occlusion condition unresolved until evidenced, and ensure these two defects are covered in your correction.
+
+### Assistant commentary
+
+The frozen scroll binary now fails through both direct and CMD launch paths, so the shell alone does not explain the occlusion. The owned window remains visible, nonminimized and uncloaked on NE18NZ2. I'll add failure-time diagnostics and cover the two confirmed delivery defects: early promotion and the CMD failure pause.
+
+The same frozen executable and actual CMD command pass outside the restricted execution context and fail inside it. That isolates an execution-context difference; I'll retain both results and compare the process diagnostics. The publisher will require successful CMD gates before promotion, and automated wrappers will exit with the failure code instead of pausing.
+
+The restricted process reports that its own desktop is not receiving user input, despite having a logically visible window. That explains why the window metadata was insufficient. The matched approved-context launch passed strict Present checks. The local command connection has now disconnected; I'll retain the evidence and resume packaging when it is available.
+
+The command connection recovered. The forced-failure regression passes for both CMD wrappers: exit code and stderr are retained, neither pauses, and LatestReady stays byte-for-byte unchanged. I'll now verify the own-desktop preflight correction and run the full corrected publication gates.
+
+### User stop delegation
+
+The user now instructs you to finish current in-flight work, commit what is needed to resume later, and stop ALL work. This supersedes the earlier continuation. Do not start more parity features, reviews, or broad investigations. Finish only the bounded launcher correction already underway if safely possible; otherwise preserve the WIP and exact blockers in a resume checkpoint. Keep LatestReady on the last fully verified camera build unless every gate including the actual CMD launcher passes for a new immutable snapshot. Preserve all snapshots and failure evidence. Commit appropriate source/documentation locally, no push, record git status, last verified build, remaining tests/risks and next steps. Stop all owned tests/processes safely without touching user applications; do not use other monitors or change system settings. Report final commit/status and confirmation no work remains running, then stop. If offline, queue this intent and report that checkpoint/commit is blocked rather than claiming success.
+
+&lt;transcript_evidence&gt;
+User message Sentinel_3da54dfba4fc81918c41c5a7fbd3f2c0, 2026-10-09 23:00 UTC: finish your current in-flight work, commit anything you need to resume later, and stop all work.
+&lt;/transcript_evidence&gt;
+
+### Assistant commentary
+
+I'll finish the bounded launcher correction, save a resume checkpoint, and stop. I won't start parity work or a new full package run. LatestReady will remain on the camera build because the corrected publisher has not passed every required gate.
+
+The launcher correction is committed locally. Release built, the isolated-desktop preflight returned exit 77 before opening an App window, and both forced CMD failure regressions passed. Camera and scroll snapshot hashes are unchanged; neither reference repository changed. No application or test process remains. I'm saving the stop checkpoint and conversation record.
+
+### Assistant final handoff (verbatim)
+
+Stopped and committed locally. Launcher fixes: `e1e495b`; [resume checkpoint](C:/Users/k/Repository/Veehiicuul3/Documentation/ShutdownCheckpoint.md) at `dabde99`. Working tree is clean; no owned tests or processes remain.
+
+LatestReady remains the verified camera build `2d889e147159`. The scroll candidate and failure logs are preserved. Release build, desktop preflight and launcher-failure regressions passed; full corrected package gates and parity work remain pending. No push.

@@ -41,7 +41,7 @@ public:
     void AssignMaterial();
     void BeginPaint();
     void PreviewPaint(PaintParameter parameter,double value);
-    void EndPaint(bool cancel=false);
+    bool EndPaint(bool cancel=false);
     void Mode(EditorMode next);
     void BuildTrack();
     void NewTrack(bool example);

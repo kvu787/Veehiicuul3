@@ -72,6 +72,12 @@ int main()
         }
         const auto thumb=SliderCursorPoint({20,8,30,22},{0,0,278,22});
         Require(thumb.x==25 && thumb.y==15,"Normal release must restore the thumb center.");
+        for(LONG size=1;size<=4;++size)
+        {
+            const RECT visible{-20,-30,-20+size,-30+size};
+            const auto point=SliderCursorPoint({-50,-60,20,30},visible);
+            Require(PtInRect(&visible,point)!=FALSE,"1-4 pixel intersections must have valid restore clamp bounds.");
+        }
         std::cout << "Passed simulated cursor ownership, exact visibility balance, reentrant/idempotent cleanup, partial acquisition failures, every loss path, destructor and thumb restore bounds; no OS cursor operations performed.\n";
         return 0;
     }

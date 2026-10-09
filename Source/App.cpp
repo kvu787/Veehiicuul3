@@ -159,7 +159,10 @@ void App::Actions(const std::vector<Ui::Action>& actions)
         }
         else if(a.kind==Ui::ActionKind::EndSlider || a.kind==Ui::ActionKind::CancelSlider)
         {
-            editor_.EndPaint(a.kind==Ui::ActionKind::CancelSlider); relative_.End(SliderPoint(),!options_.hidden && !options_.smoke); slider_=0; Change(false);
+            if(editor_.EndPaint(a.kind==Ui::ActionKind::CancelSlider)) modifiedModel_=true;
+            POINT point{}; bool restore=!options_.hidden && !options_.smoke;
+            try { point=SliderPoint(); } catch(const std::invalid_argument&) { restore=false; }
+            slider_=0; relative_.End(point,restore); Change(false);
         }
         else Command(a.id,a.value);
     }
@@ -381,7 +384,9 @@ POINT App::SliderPoint() const
     const auto* c=ui_.Find(slider_); if(!c) return {};
     const auto range=ParameterRange(static_cast<PaintParameter>(slider_-SliderFirst)); const auto t=(ParameterValue(editor_.Material().paint,static_cast<PaintParameter>(slider_-SliderFirst))-range.minimum)/(range.maximum-range.minimum);
     const auto visible=Ui::Intersect(c->rect,c->clip),image=presentation_.Image();
-    POINT point{static_cast<LONG>(std::clamp(c->rect.x+8+static_cast<float>(t)*(c->rect.w-16),visible.x+2,visible.x+visible.w-2)+image.x),static_cast<LONG>(std::clamp(c->rect.y+c->rect.h*.5f,visible.y+2,visible.y+visible.h-2)+image.y)};
+    const LONG x=static_cast<LONG>(std::floor(c->rect.x+8+static_cast<float>(t)*(c->rect.w-16))),y=static_cast<LONG>(std::floor(c->rect.y+c->rect.h*.5f));
+    auto point=SliderCursorPoint({x,y,x+1,y+1},{static_cast<LONG>(std::ceil(visible.x)),static_cast<LONG>(std::ceil(visible.y)),static_cast<LONG>(std::ceil(visible.x+visible.w)),static_cast<LONG>(std::ceil(visible.y+visible.h))});
+    point.x+=static_cast<LONG>(image.x); point.y+=static_cast<LONG>(image.y);
     ClientToScreen(window_,&point); return point;
 }
 void App::Abort(bool restore)
@@ -485,9 +490,25 @@ void App::Key(UINT key)
     {
         if(key=='F') { editor_.Frame(); Change(false); }
         else if(key=='E') Command(ExtrudeAction);
-        else if(key=='R' || key=='S') { const bool whole=editor_.model.selection.mode==SelectionMode::Object; const auto& object=editor_.Object(); auto rotation=whole ? object.rotationDegrees : Vector3{}; auto scale=whole ? object.scale : 1.f; if(key=='R') rotation.y+=shift ? -5.f : 5.f; else scale*=shift ? 1/1.1f : 1.1f; editor_.Transform(editor_.Center(),rotation,scale); Change(); }
+        else if(key=='R' || key=='S') TransformKey(key,shift);
         else { const auto step=editor_.step*(shift ? .1f : 1.f); Vector3 delta{}; if(key==VK_LEFT) delta.x=-step; else if(key==VK_RIGHT) delta.x=step; else if(key==VK_UP) delta.y=step; else if(key==VK_DOWN) delta.y=-step; else if(key==VK_PRIOR) delta.z=step; else if(key==VK_NEXT) delta.z=-step; if(delta.Length()>0) { editor_.Nudge(delta); modifiedModel_=true; Change(); } }
     }
+}
+void App::TransformKey(UINT key,bool shift)
+{
+    const bool whole=editor_.model.selection.mode==SelectionMode::Object; const auto& object=editor_.Object();
+    auto rotation=whole ? object.rotationDegrees : Vector3{}; auto scale=whole ? object.scale : 1.f;
+    if(key=='R') rotation.y+=shift ? -5.f : 5.f; else scale*=shift ? 1/1.1f : 1.1f;
+    editor_.Transform(editor_.Center(),rotation,scale); modifiedModel_=true; Change();
+}
+void App::SaveModel(const std::filesystem::path& path)
+{
+    SaveScene(editor_.model.scene,path); modelPath_=path; modifiedModel_=false;
+}
+void App::OpenModel(const std::filesystem::path& path)
+{
+    auto scene=LoadScene(path); editor_.ModelEdit([&] { editor_.model.scene=scene; editor_.model.selection={SelectionMode::Object,0,-1,{},0}; });
+    modelPath_=path; modifiedModel_=false; editor_.Frame(); Change();
 }
 void App::File(int action)
 {
@@ -505,8 +526,8 @@ void App::File(int action)
         if(!(save ? GetSaveFileNameW(&dialog) : GetOpenFileNameW(&dialog))) return; path=filename;
     }
     if(action==ExportFile) ExportMesh(editor_.model.scene,path);
-    else if(save) { if(model) { SaveScene(editor_.model.scene,path); modelPath_=path; modifiedModel_=false; } else { SaveTrack(editor_.track,path); trackPath_=path; modifiedTrack_=false; } }
-    else if(model) { auto scene=LoadScene(path); editor_.ModelEdit([&] { editor_.model.scene=scene; editor_.model.selection={SelectionMode::Object,0,-1,{},0}; }); modelPath_=path; modifiedModel_=false; editor_.Frame(); }
+    else if(save) { if(model) SaveModel(path); else { SaveTrack(editor_.track,path); trackPath_=path; modifiedTrack_=false; } }
+    else if(model) OpenModel(path);
     else { auto track=LoadTrack(path); editor_.TrackEdit([&] { editor_.track=track; }); trackPath_=path; modifiedTrack_=false; editor_.outline=0; editor_.point=0; editor_.BuildTrack(); editor_.Frame(); }
     status_=L"Saved/opened: "+path.filename().wstring(); Change();
 }
@@ -519,7 +540,7 @@ LRESULT App::Message(UINT message,WPARAM wparam,LPARAM lparam)
     case WM_SIZE:schedule_.minimized=wparam==SIZE_MINIMIZED; schedule_.dirty=true; return 0;
     case WM_ACTIVATE: foreground_=LOWORD(wparam)!=WA_INACTIVE; gamepad_.SetForeground(foreground_ && editor_.mode==EditorMode::Drive); schedule_.active=foreground_ && editor_.mode==EditorMode::Drive; if(!foreground_) Abort(); return 0;
     case WM_KILLFOCUS:foreground_=false; schedule_.active=false; gamepad_.SetForeground(false); Abort(); return 0;
-    case WM_CAPTURECHANGED:if(reinterpret_cast<HWND>(lparam)!=window_ && (slider_ || modelDrag_ || trackDrag_ || orbit_ || pan_)) Abort(); return 0;
+    case WM_CAPTURECHANGED:if(reinterpret_cast<HWND>(lparam)!=window_ && (ui_.capture || slider_ || modelDrag_ || trackDrag_ || orbit_ || pan_)) Abort(); return 0;
     case WM_CANCELMODE:Abort();return 0;
     case WM_INPUT:RawMouse(reinterpret_cast<HRAWINPUT>(lparam));return DefWindowProcW(window_,message,wparam,lparam);
     case WM_KEYDOWN:if(wparam<256) held_[wparam]=true; Key(static_cast<UINT>(wparam)); return 0;
@@ -580,6 +601,7 @@ int App::Run()
 }
 void App::TestWorkflow()
 {
+    TestUiTransactions();
     Command(NewPrimitive); Command(CopyPaint); editor_.model.selection.mode=SelectionMode::Face; editor_.model.selection.face=0; Command(AssignPaint); Command(PaintFirst,.7); Command(ExtrudeAction); Command(RefineAction);
     SaveScene(editor_.model.scene,options_.session/"TwoPaint.modeler"); ExportMesh(editor_.model.scene,options_.session/"TwoPaint.h");
     const auto authored=SerializeScene(editor_.model.scene); Draw(!options_.hidden); renderer_.Capture(options_.session/"Model2560x1440.bmp");
@@ -614,6 +636,43 @@ void App::TestWorkflow()
             else for(int c=0;c<3;++c) Require(presented[output+c]==0,"Presentation margin is not black.");
         }
     }
+}
+void App::TestUiTransactions()
+{
+    Command(NewCar); const auto path=options_.session/"Clean.modeler"; SaveModel(path);
+    for(bool opened:{false,true})
+    {
+        if(opened) OpenModel(path); else SaveModel(path);
+        ui_.scroll=1000; Interface(); const auto clean=SerializeScene(editor_.model.scene);
+        Actions({{Ui::ActionKind::BeginSlider,SliderFirst}}); editor_.PreviewPaint(PaintParameter::Red,opened ? .415 : .314);
+        Actions({{Ui::ActionKind::EndSlider,SliderFirst}}); Require(modifiedModel_,"Committed slider did not mark a clean saved/opened model unsaved.");
+        SaveModel(path); Actions({{Ui::ActionKind::BeginSlider,SliderFirst}}); Actions({{Ui::ActionKind::EndSlider,SliderFirst}});
+        Require(!modifiedModel_,"Unchanged slider marked a clean model unsaved.");
+        OpenModel(path); const auto beforeCancel=SerializeScene(editor_.model.scene);
+        Actions({{Ui::ActionKind::BeginSlider,SliderFirst}}); editor_.PreviewPaint(PaintParameter::Red,.618);
+        Actions({{Ui::ActionKind::CancelSlider,SliderFirst}}); Require(!modifiedModel_ && SerializeScene(editor_.model.scene)==beforeCancel,"Canceled slider changed a clean model or its unsaved state.");
+        TransformKey('R',false); Require(modifiedModel_,"Keyboard rotation bypassed unsaved warning."); SaveModel(path);
+        TransformKey('S',false); Require(modifiedModel_,"Keyboard scale bypassed unsaved warning.");
+        Actions({{Ui::ActionKind::BeginSlider,SliderFirst}}); editor_.PreviewPaint(PaintParameter::Red,.618); Actions({{Ui::ActionKind::CancelSlider,SliderFirst}});
+        Require(modifiedModel_,"Cancel cleared previously committed unsaved changes.");
+        Require(clean!=SerializeScene(editor_.model.scene),"Authored regression operations were no-ops.");
+    }
+    Interface(); menu_=0; Pointer(WM_LBUTTONDOWN,20,20,0); Require(ui_.capture==ModeMenu,"Button capture test did not start.");
+    Message(WM_CAPTURECHANGED,0,0); Pointer(WM_LBUTTONUP,20,20,0); Require(!ui_.capture && !menu_,"Button activated after capture loss without focus loss.");
+    ui_.scroll=1000; Interface(); const auto thumb=ui_.Thumb(); Pointer(WM_LBUTTONDOWN,thumb.x+2,thumb.y+2,0); Require(ui_.capture==-1,"Scrollbar capture test did not start.");
+    Message(WM_CAPTURECHANGED,0,0); const auto scroll=ui_.scroll; Pointer(WM_MOUSEMOVE,thumb.x+2,thumb.y+102,0); Pointer(WM_LBUTTONUP,thumb.x+2,thumb.y+102,0);
+    Require(!ui_.capture && ui_.scroll==scroll,"Scrollbar remained active after capture loss.");
+    for(int height=1;height<=4;++height) for(bool escape:{false,true})
+    {
+        Interface(); auto& slider=*std::find_if(ui_.controls.begin(),ui_.controls.end(),[](const Ui::Control& c){return c.id==SliderFirst;});
+        slider.rect={12,32.f+height,404,30}; slider.clip={12,62,404,static_cast<float>(height)};
+        Actions(ui_.Down(32,62.5f)); Require(relative_.Active(),"Partially clipped slider did not capture.");
+        const auto point=SliderPoint(); const auto image=presentation_.Image(); const auto y=point.y-presentation_.originY-static_cast<LONG>(image.y);
+        Require(y>=62 && y<62+height,"Clipped slider restore was outside its 1-4 pixel intersection.");
+        if(escape) Key(VK_ESCAPE); else Actions(ui_.Up(32,62.5f));
+        Require(!relative_.Active() && !ui_.capture && pointerPlatform_.SimulatedClean(),"Clipped slider release/Escape leaked capture.");
+    }
+    ui_.scroll=0; modelPath_.clear(); Change();
 }
 int App::Tests()
 {

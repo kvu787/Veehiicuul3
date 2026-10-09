@@ -31,10 +31,14 @@ private:
     Racing2D::Point Ground(float x,float y) const;
     void Pointer(UINT message,float x,float y,WPARAM buttons);
     void Key(UINT key);
+    void TransformKey(UINT key,bool shift);
     void Abort(bool restore=false);
     POINT SliderPoint() const;
     void RawMouse(HRAWINPUT input);
     void File(int action);
+    void SaveModel(const std::filesystem::path& path);
+    void OpenModel(const std::filesystem::path& path);
+    void TestUiTransactions();
     void TestWorkflow();
     int Tests();
     Camera& ViewCamera() { return editor_.mode==EditorMode::ModelBuilder ? editor_.modelCamera : editor_.trackCamera; }

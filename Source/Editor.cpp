@@ -87,12 +87,13 @@ void Editor::PreviewPaint(PaintParameter p,double value)
     const auto range=ParameterRange(p); if(!std::isfinite(value) || value<range.minimum || value>range.maximum) throw std::invalid_argument("Paint outside valid range.");
     BeginPaint(); auto paint=Material().paint; SetParameter(paint,p,value); (void)SimplePaint::Material::Compile(paint); Material().paint=paint;
 }
-void Editor::EndPaint(bool cancel)
+bool Editor::EndPaint(bool cancel)
 {
-    if(!paintStart_) return;
+    if(!paintStart_) return false;
+    const bool changed=!cancel && SerializeScene(model.scene)!=SerializeScene(paintStart_->scene);
     if(cancel) model=*paintStart_;
-    else if(SerializeScene(model.scene)!=SerializeScene(paintStart_->scene)) { if(modelUndo_.size()>=128) modelUndo_.erase(modelUndo_.begin()); modelUndo_.push_back(*paintStart_); modelRedo_.clear(); }
-    paintStart_.reset();
+    else if(changed) { if(modelUndo_.size()>=128) modelUndo_.erase(modelUndo_.begin()); modelUndo_.push_back(*paintStart_); modelRedo_.clear(); }
+    paintStart_.reset(); return changed;
 }
 void Editor::Mode(EditorMode next)
 {

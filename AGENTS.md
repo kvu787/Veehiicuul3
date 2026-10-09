@@ -22,6 +22,8 @@ When implementing stuff, avoid difficult-to-review "mega-commits".
 When it makes sense, split work into multiple commits to make it easier to review.
 Separate commits that record conversations from other commits.
 
+Never run git push. Keep all commits local. This policy supersedes the earlier public-push authorization, revoked by the user on 2026-10-09 at 17:40:31 UTC. Do not request push approval or use another publishing transport as a substitute.
+
 ## Markdown tables
 
 Tables in Markdown must be padded and aligned in a way to make them easy to read in a plaintext editor, not only in a Markdown viewer.

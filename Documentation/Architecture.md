@@ -21,7 +21,7 @@ The user explicitly omitted Tab navigation and accessibility work. Do not add Ta
 3. Close application workflow gaps incrementally with domain and shared UI state tests. This does not authorize adding omitted framework features.
 4. Verify displayed rendering and physical interaction exclusively on NE18NZ2. Locked sessions do not block stages 1-3 or hidden GPU checks. Candidate builds stay explicitly unverified until their displayed checks pass.
 
-No dependency installation, security/power setting change or unlock is authorized. Public normal pushes to the existing Veehiicuul3 origin were subsequently approved by the user; execution is currently blocked by automatic approval review's inability to accept the relayed approval evidence. No transport workaround or further retry is allowed. Self-contained snapshots are Git-ignored, immutable, named by source commit, and retain earlier snapshots.
+No dependency installation, security/power setting change or unlock is authorized. Effective 2026-10-09 17:40:31 UTC, never run git push. All commits stay local; the earlier public-push approval is revoked. Do not request push approval or substitute another publishing transport. Self-contained snapshots are Git-ignored, immutable, named by source commit, and retain earlier snapshots.
 
 ## Visibility and production scheduling
 

@@ -492,10 +492,11 @@ void Renderer::Render(const ViewGeometry& geometry, const Orthographic::ObjectTr
         QueryPerformanceCounter(&counter); measurement.clockLastQpc=static_cast<std::uint64_t>(counter.QuadPart);
         QueryPerformanceCounter(&counter); measurement.presentFirstQpc=static_cast<std::uint64_t>(counter.QuadPart);
         const auto result=swapChain_->Present(0,tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0);
+        lastPresentResult_=result;
         QueryPerformanceCounter(&counter); measurement.presentEndQpc=static_cast<std::uint64_t>(counter.QuadPart); measurement.accepted=result==S_OK;
         Check(result,"Present frame");
     }
-    else if(present) Check(swapChain_->Present(0, tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0),"Present frame");
+    else if(present) { lastPresentResult_=swapChain_->Present(0, tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0); Check(lastPresentResult_,"Present frame"); }
     if(present) ++presents_;
     frame.fence = nextFence_++;
     Check(queue_->Signal(fence_.Get(), frame.fence), "Signal frame completion");

@@ -48,7 +48,7 @@ public:
     void FinishOutline();
     void Place(Racing2D::Point value);
     void UseAsset(bool vehicle);
-    void Frame();
+    void Frame(bool selected=false);
 private:
     std::vector<ModelState> modelUndo_,modelRedo_;
     std::vector<TrackProject> trackUndo_,trackRedo_;

@@ -37,6 +37,7 @@ public:
     static constexpr UINT VisibilityMessage=WM_APP+23;
     void StopVisibilityNotifications();
     uint64_t Presents() const { return presents_; }
+    HRESULT LastPresentResult() const { return lastPresentResult_; }
 private:
     template<class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
     struct Frame
@@ -79,6 +80,7 @@ private:
     ComPtr<ID3D12Resource> atlasTexture_,surface_;
     ComPtr<ID3D12DescriptorHeap> textureHeap_;
     uint64_t atlasRevision_=0,presents_=0;
+    HRESULT lastPresentResult_=S_OK;
     unsigned displayWidth_=1,displayHeight_=1;
     std::array<Frame, 2> frames_;
     ComPtr<ID3D12Resource> materials_;

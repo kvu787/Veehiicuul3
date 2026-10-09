@@ -64,7 +64,7 @@ private:
     GamepadInput gamepad_;
     std::unique_ptr<DisplayTracker> tracker_;
     ConsumedDisplayInputs displayInputs_;
-    uint64_t displayFrame_=0,wakes_=0,ticks_=0,testTracedPresents_=0;
+    uint64_t displayFrame_=0,wakes_=0,ticks_=0,testTracedPresents_=0,testTracedAccepted_=0;
     Scene shown_;
     ViewGeometry geometry_;
     std::array<SimplePaint::GpuMaterial,32> paints_{};

@@ -137,10 +137,13 @@ void Editor::Place(Racing2D::Point p)
     }
 }
 void Editor::UseAsset(bool vehicle) { TrackEdit([&] { if(vehicle) track.vehicle=model.scene; else track.decoration=model.scene; }); }
-void Editor::Frame()
+void Editor::Frame(bool selected)
 {
+    if(selected && (mode!=EditorMode::ModelBuilder || model.selection.object<0 || static_cast<size_t>(model.selection.object)>=model.scene.objects.size())) throw std::invalid_argument("Select a model part to frame.");
     if(mode!=EditorMode::ModelBuilder) { trackCamera.target={}; trackCamera.height=100; trackCamera.pitch=1.1f; trackCamera.yaw=0; return; }
-    std::vector<PaintVertex> vertices; std::vector<uint32_t> indices; BuildSurface(model.scene,vertices,indices);
+    std::vector<PaintVertex> vertices; std::vector<uint32_t> indices;
+    if(selected) { Scene part; part.objects={Object()}; BuildSurface(part,vertices,indices); }
+    else BuildSurface(model.scene,vertices,indices);
     Vector3 minimum{1e20f,1e20f,1e20f},maximum{-1e20f,-1e20f,-1e20f};
     for(const auto& v:vertices) { minimum={std::min(minimum.x,v.positionX),std::min(minimum.y,v.positionY),std::min(minimum.z,v.positionZ)}; maximum={std::max(maximum.x,v.positionX),std::max(maximum.y,v.positionY),std::max(maximum.z,v.positionZ)}; }
     modelCamera.target=(minimum+maximum)*.5f; modelCamera.height=std::max(1.f,(maximum-minimum).Length()*1.25f);

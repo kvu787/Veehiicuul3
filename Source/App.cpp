@@ -12,7 +12,7 @@
 
 namespace
 {
-enum Id { ModeMenu=1,FileMenu,UndoAction,RedoAction,FrameAction,CageAction,QuitAction,
+enum Id { ModeMenu=1,FileMenu,UndoAction,RedoAction,FrameAction,CageAction,QuitAction,FrameSelectedAction,
     ModelMode=20,TrackMode,DriveMode,NewCar=30,NewPrimitive,OpenProject,SaveFile,SaveAs,ExportFile,
     AddBox=40,AddPlane,AddCylinder,ObjectTarget=50,VertexTarget,FaceTarget,RefineAction,ExtrudeAction,CopyPaint,AssignPaint,ResetPaint,
     NewTrack=100,ExampleTrack,BuildTrack,SelectTool,OutlineTool,FinishOutline,CancelDraft,SpawnTool,FinishTool,CheckpointTool,DecorationTool,UseVehicle,UseDecoration,
@@ -106,7 +106,8 @@ void App::Interface()
     auto top=[&](int id,const wchar_t* text,float x,float w,bool enabled=true) { Ui::Control c; c.id=id; c.kind=Ui::Kind::Button; c.rect={x,12,w,38}; c.clip=all; c.text=text; c.enabled=enabled; ui_.Add(c,false); };
     top(ModeMenu,L"Mode",12,115); top(FileMenu,L"File",137,100); top(UndoAction,L"Undo",255,100,editor_.CanUndo(false)); top(RedoAction,L"Redo",365,100,editor_.CanUndo(true)); top(FrameAction,L"Frame all",483,145);
     top(CageAction,editor_.cage ? L"Cage: on" : L"Cage: off",640,145,editor_.mode==EditorMode::ModelBuilder); top(QuitAction,L"Exit",2440,108);
-    Ui::Control title; title.text=L"Veehiicuul3   |   "+std::wstring(editor_.mode==EditorMode::ModelBuilder ? L"Model builder" : editor_.mode==EditorMode::TrackBuilder ? L"Track builder" : L"Drive"); title.rect={820,12,1000,38}; title.clip=all; ui_.Add(title,false);
+    top(FrameSelectedAction,L"Frame selected",795,175,editor_.mode==EditorMode::ModelBuilder && editor_.model.selection.object>=0);
+    Ui::Control title; title.text=L"Veehiicuul3   |   "+std::wstring(editor_.mode==EditorMode::ModelBuilder ? L"Model builder" : editor_.mode==EditorMode::TrackBuilder ? L"Track builder" : L"Drive"); title.rect={990,12,1000,38}; title.clip=all; ui_.Add(title,false);
     auto label=[&](const std::wstring& text) { Ui::Control c; c.rect={12,y,404,34}; c.text=text; ui_.Add(c); y+=36; };
     auto button=[&](int id,const std::wstring& text,bool enabled=true,bool selected=false) { Ui::Control c; c.id=id; c.kind=Ui::Kind::Button; c.rect={12,y,404,36}; c.text=text; c.enabled=enabled; c.selected=selected; ui_.Add(c); y+=42; };
     auto number=[&](int id,const wchar_t* name,double value,double minimum,double maximum,bool enabled=true) { Ui::Control l; l.rect={12,y,158,38}; l.text=name; l.enabled=enabled; ui_.Add(l); Ui::Control c; c.id=id; c.kind=Ui::Kind::Number; c.rect={175,y,241,38}; c.value=value; c.minimum=minimum; c.maximum=maximum; c.enabled=enabled; ui_.Add(c); y+=44; };
@@ -223,7 +224,7 @@ void App::Command(int id,double value)
     if(id==ModeMenu || id==FileMenu) { Change(false); return; }
     if(id==ModelMode || id==TrackMode || id==DriveMode) { Mode(id==ModelMode ? EditorMode::ModelBuilder : id==TrackMode ? EditorMode::TrackBuilder : EditorMode::Drive); return; }
     if(id==QuitAction) { PostMessageW(window_,WM_CLOSE,0,0); return; }
-    if(id==FrameAction) { editor_.Frame(); Change(false); return; }
+    if(id==FrameAction || id==FrameSelectedAction) { editor_.Frame(id==FrameSelectedAction); Change(false); return; }
     if(id==CageAction) { editor_.cage=!editor_.cage; Change(false); return; }
     if(id==UndoAction || id==RedoAction) editor_.Undo(id==RedoAction);
     else if(id==OpenProject || id==SaveFile || id==SaveAs || id==ExportFile) { File(id); return; }
@@ -351,7 +352,12 @@ void App::Draw(bool present)
     }
     renderer_.Render(geometry_,transforms,std::span(paints_.data(),MaterialCount(shown_)),std::span(surfaces_.data(),MaterialCount(shown_)),vehiclePointer,probePointer,&text_.Data(),view_,present);
     if(probePointer && tracker_) tracker_->Submit(frame);
-    if(probePointer && testPresentProbe_) { Require(frame.accepted,"Traced present was rejected."); ++testTracedPresents_; }
+    if(probePointer && testPresentProbe_)
+    {
+        ++testTracedPresents_; if(frame.accepted) ++testTracedAccepted_;
+        else std::ofstream(options_.session/"PresentStatus.txt",std::ios::app)<<"Instrumented Present HRESULT 0x"<<std::hex<<static_cast<unsigned long>(renderer_.LastPresentResult())<<"; submission acceptance remains false.\n";
+        Require(frame.accepted,"Instrumented Present was not S_OK; exact HRESULT retained in PresentStatus.txt. Assertion remains strict pending diagnosis.");
+    }
     schedule_.dirty=false;
 }
 void App::Tick(double seconds,bool synthetic)
@@ -529,7 +535,7 @@ void App::Key(UINT key)
     else if(key==VK_F5) Mode(editor_.mode==EditorMode::Drive ? EditorMode::TrackBuilder : EditorMode::Drive);
     else if(editor_.mode==EditorMode::ModelBuilder)
     {
-        if(key=='F') { editor_.Frame(); Change(false); }
+        if(key=='F') { editor_.Frame(shift); Change(false); }
         else if(key=='E') Command(ExtrudeAction);
         else if(key=='R' || key=='S') TransformKey(key,shift);
         else { const auto step=editor_.step*(shift ? .1f : 1.f); Vector3 delta{}; if(key==VK_LEFT) delta.x=-step; else if(key==VK_RIGHT) delta.x=step; else if(key==VK_UP) delta.y=step; else if(key==VK_DOWN) delta.y=-step; else if(key==VK_PRIOR) delta.z=step; else if(key==VK_NEXT) delta.z=-step; if(delta.Length()>0) { editor_.Nudge(delta); modifiedModel_=true; Change(); } }
@@ -711,6 +717,8 @@ void App::TestWorkflow()
 void App::TestUiTransactions()
 {
     Command(NewCar); const auto path=options_.session/"Clean.modeler"; SaveModel(path);
+    const auto framed=SerializeScene(editor_.model.scene); Command(FrameSelectedAction);
+    Require(!modifiedModel_ && SerializeScene(editor_.model.scene)==framed,"Framing selected part changed clean authored state.");
     for(bool opened:{false,true})
     {
         if(opened) OpenModel(path); else SaveModel(path);
@@ -770,8 +778,8 @@ int App::Tests()
     Require(renderer_.Presents()==startPresents,"Static UI presented frames while idle.");
     Require(idleWakes<=8,"Static production scheduler woke continuously while idle.");
     char commit[128]{}; WideCharToMultiByte(CP_UTF8,0,VEEHIICUUL3_COMMIT,-1,commit,sizeof(commit),nullptr,nullptr);
-    std::ofstream out(options_.session/"Verification.txt"); out<<"Veehiicuul3 "<<commit<<"\nAdapter: "<<renderer_.AdapterName()<<"\nHidden: "<<options_.hidden<<"\nPresents: "<<renderer_.Presents()<<"\nIdle seconds: 3\nIdle new presents: "<<renderer_.Presents()-startPresents<<"\nIdle wakes: "<<idleWakes<<"\nIdle CPU ms: "<<double(time(kernelAfter)+time(userAfter)-time(kernelBefore)-time(userBefore))/10000<<"\nDX12 warnings/errors: "<<renderer_.DebugErrors()<<"\nDebug layer enabled: "<<renderer_.HasDebugLayer()<<"\nTest acquired foreground/focus/capture: false\nObserved foreground/focus/capture stable: "<<foregroundStable<<"\nObserved user cursor stable: "<<cursorStable<<"\nCursor operations: simulated only\nProduction Run/Pump path: idle and driving suspension/resume passed\nVisibility signals: synthetic show/minimize/session/display-power/cloak/suspend; OS registrations exercised, no OS state changed\nTraced Present probe branch: "<<testTracedPresents_<<" accepted submissions (no physical ETW association claim)\nPhysical input and actual ETW display association: pending\n";
-    out<<"Cached unavailable input desktop: unlock/connect/desktop-ready refresh passed\nContinuous single-Pump resume checks: "<<resumeChecks_<<" (spaced and batched notifications, ordinary and instrumented Present)\n";
+    std::ofstream out(options_.session/"Verification.txt"); out<<"Veehiicuul3 "<<commit<<"\nAdapter: "<<renderer_.AdapterName()<<"\nHidden: "<<options_.hidden<<"\nPresents: "<<renderer_.Presents()<<"\nIdle seconds: 3\nIdle new presents: "<<renderer_.Presents()-startPresents<<"\nIdle wakes: "<<idleWakes<<"\nIdle CPU ms: "<<double(time(kernelAfter)+time(userAfter)-time(kernelBefore)-time(userBefore))/10000<<"\nDX12 warnings/errors: "<<renderer_.DebugErrors()<<"\nDebug layer enabled: "<<renderer_.HasDebugLayer()<<"\nTest acquired foreground/focus/capture: false\nObserved foreground/focus/capture stable: "<<foregroundStable<<"\nObserved user cursor stable: "<<cursorStable<<"\nCursor operations: simulated only\nProduction Run/Pump path: idle and driving suspension/resume passed\nVisibility signals: synthetic show/minimize/session/display-power/cloak/suspend; OS registrations exercised, no OS state changed\nInstrumented Present probe branch: "<<testTracedPresents_<<" submissions (no physical ETW association claim)\nPhysical input and actual ETW display association: pending\n";
+    out<<"Instrumented S_OK submissions: "<<testTracedAccepted_<<" of "<<testTracedPresents_<<"; positive status diagnostics retained separately\nCached unavailable input desktop: unlock/connect/desktop-ready refresh passed\nContinuous single-Pump resume checks: "<<resumeChecks_<<" (spaced and back-to-back posted notifications, ordinary and instrumented Present)\n";
     if(options_.smoke && !InputDesktopAvailable()) { std::ofstream(options_.session/"Skipped.txt")<<"Input desktop became unavailable during displayed checks. Visual verification pending."; return 77; }
     return 0;
 }

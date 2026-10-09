@@ -18,7 +18,7 @@ public:
     Racing2D::Session race;
     std::vector<Racing2D::WeightedPoint> draft;
     std::optional<Racing2D::Point> gateStart;
-    int outline=1,point=0,decoration=0;
+    int outline=1,point=0,decoration=0,gate=0; // Gate 0 is finish; 1..count are checkpoints in authored order.
     enum class Tool { Select,Outline,Spawn,Finish,Checkpoint,Decoration } tool=Tool::Select;
     bool cage=true;
     float step=.1f;
@@ -29,7 +29,7 @@ public:
     std::vector<uint32_t> SelectedVertices() const;
     Vector3 Center() const;
     void ModelEdit(const std::function<void()>& operation);
-    void TrackEdit(const std::function<void()>& operation,bool preservesGeometry=false);
+    void TrackEdit(const std::function<void()>& operation,bool preservesGeometry=false,bool preservesBoundaries=false);
     bool Undo(bool redo); // True when rendering geometry must be rebuilt; colors/exact same-boundary history return false.
     bool CanUndo(bool redo) const;
     void AddShape(int kind);
@@ -48,6 +48,10 @@ public:
     bool SetOutlineDegree(double value);
     enum class KnotEdit { Unchanged,SameBoundary,ChangedBoundary };
     KnotEdit SetOutlineKnots(std::string_view text);
+    bool GateSelected() const;
+    Racing2D::Gate SelectedGate() const;
+    bool SetGatePlacement(Racing2D::GatePlacement placement);
+    bool CanDrive() const;
     void Mode(EditorMode next);
     void BuildTrack();
     void NewTrack(bool example);

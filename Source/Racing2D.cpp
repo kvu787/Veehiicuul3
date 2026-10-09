@@ -245,6 +245,29 @@ bool Crosses(Gate gate,Point previous,Point current)
     const auto along=Dot(position-gate.a,line)/Dot(line,line);
     return along>=0 && along<=1;
 }
+GatePlacement DescribeGate(Gate gate)
+{
+    const auto edge=gate.b-gate.a; const auto width=edge.Length();
+    Require(Finite(gate.a) && Finite(gate.b) && width>=.1,"Select a valid placed gate.");
+    return {(gate.a+gate.b)*.5,std::atan2(edge.x,-edge.y)*180/std::numbers::pi,width};
+}
+Gate PlaceGate(GatePlacement placement)
+{
+    Require(Finite(placement.center) && std::isfinite(placement.headingDegrees),"Gate center/heading must be finite; center coordinates must be within +/-10000.");
+    Require(std::isfinite(placement.width) && placement.width>=.1 && placement.width<=1000,"Gate width must be in [0.1,1000] meters.");
+    const auto radians=std::remainder(placement.headingDegrees,360.)*std::numbers::pi/180;
+    const Point side{std::sin(radians),-std::cos(radians)};
+    auto width=placement.width;
+    auto make=[&] { return Gate{placement.center-side*(width*.5),placement.center+side*(width*.5)}; };
+    auto gate=make();
+    // Coordinate rounding must not make an explicitly valid endpoint width fall
+    // just outside the UI's bounds. No file validation tolerance is changed.
+    const auto padding=16*std::numeric_limits<double>::epsilon()*std::max({1.,placement.width,std::abs(placement.center.x),std::abs(placement.center.y)});
+    if((gate.b-gate.a).Length()<=.1) { width=.1+padding; gate=make(); }
+    else if((gate.b-gate.a).Length()>1000) { width=1000-padding; gate=make(); }
+    Require(Finite(gate.a) && Finite(gate.b),"Gate endpoints must remain within +/-10000; move its center or reduce its width.");
+    return gate;
+}
 void Session::Begin(const Track& track,const GeneratedTrack& generated,double collisionRadius)
 {
     ValidateRace(track,generated,collisionRadius);

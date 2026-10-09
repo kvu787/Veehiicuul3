@@ -51,13 +51,13 @@ void Editor::ModelEdit(const std::function<void()>& operation)
     if(modelUndo_.size()>=128) modelUndo_.erase(modelUndo_.begin());
     modelUndo_.push_back(std::move(previous)); modelRedo_.clear();
 }
-void Editor::TrackEdit(const std::function<void()>& operation,bool preservesGeometry)
+void Editor::TrackEdit(const std::function<void()>& operation,bool preservesGeometry,bool preservesBoundaries)
 {
     auto previous=track;
     try { operation(); ValidateTrackProject(track,false); }
     catch(...) { track=std::move(previous); throw; }
     if(trackUndo_.size()>=128) trackUndo_.erase(trackUndo_.begin());
-    trackUndo_.push_back({std::move(previous),preservesGeometry}); trackRedo_.clear(); if(!preservesGeometry) generated.reset();
+    trackUndo_.push_back({std::move(previous),preservesGeometry}); trackRedo_.clear(); if(!preservesGeometry && !preservesBoundaries) generated.reset();
 }
 bool Editor::CanUndo(bool redo) const { return mode==EditorMode::ModelBuilder ? !(redo ? modelRedo_ : modelUndo_).empty() : mode==EditorMode::TrackBuilder && !(redo ? trackRedo_ : trackUndo_).empty(); }
 bool Editor::Undo(bool redo)
@@ -155,6 +155,28 @@ Editor::KnotEdit Editor::SetOutlineKnots(std::string_view text)
     TrackEdit([&] { track.track.outlines[index]=std::move(next); },sameBoundary);
     return sameBoundary ? KnotEdit::SameBoundary : KnotEdit::ChangedBoundary;
 }
+bool Editor::GateSelected() const { return gate==0 ? track.track.hasFinish : gate>0 && static_cast<size_t>(gate)<=track.track.checkpoints.size(); }
+Racing2D::Gate Editor::SelectedGate() const
+{
+    if(!GateSelected()) throw std::invalid_argument("Select a placed checkered line or checkpoint.");
+    return gate==0 ? track.track.finish : track.track.checkpoints[static_cast<size_t>(gate-1)];
+}
+bool Editor::SetGatePlacement(Racing2D::GatePlacement placement)
+{
+    if(mode!=EditorMode::TrackBuilder || colorStart_ || gateStart) throw std::invalid_argument("Finish or cancel the active gesture/gate draft before editing a placed gate.");
+    const auto original=SelectedGate(); const auto previous=Racing2D::DescribeGate(original);
+    const auto next=Racing2D::PlaceGate(placement); // Validate the full planar candidate before touching authored state/history.
+    const bool sameHeading=std::remainder(std::remainder(placement.headingDegrees,360.)-previous.headingDegrees,360.)==0;
+    if(placement.center==previous.center && placement.width==previous.width && sameHeading) return false;
+    TrackEdit([&] { if(gate==0) track.track.finish=next; else track.track.checkpoints[static_cast<size_t>(gate-1)]=next; },false,true);
+    return true;
+}
+bool Editor::CanDrive() const
+{
+    if(!generated || !draft.empty() || gateStart) return false;
+    try { Racing2D::ValidateRace(track.track,*generated,VehicleRadius(track)); return true; }
+    catch(const std::invalid_argument&) { return false; }
+}
 void Editor::Mode(EditorMode next)
 {
     if(mode==next) return; EndPaint(); EndOutlineColor();
@@ -172,7 +194,7 @@ void Editor::BuildTrack() { auto next=Racing2D::Generate(track.track); ValidateT
 void Editor::NewTrack(bool example)
 {
     TrackEdit([&] { track=TrackProject{}; if(!example) { track.track=Racing2D::Track{}; track.track.outlines.clear(); track.track.hasFinish=track.track.hasSpawn=false; track.track.checkpoints.clear(); } });
-    outline=0; point=0; draft.clear(); gateStart.reset(); tool=Tool::Select;
+    outline=0; point=0; gate=track.track.hasFinish ? 0 : -1; draft.clear(); gateStart.reset(); tool=Tool::Select;
     if(example) BuildTrack(); Frame();
 }
 void Editor::FinishOutline()
@@ -191,9 +213,11 @@ void Editor::Place(Racing2D::Point p)
     else if(tool==Tool::Finish || tool==Tool::Checkpoint)
     {
         if(!gateStart) { gateStart=p; return; }
-        const Racing2D::Gate gate{*gateStart,p};
-        if((gate.b-gate.a).Length()<.01) throw std::invalid_argument("Gate endpoints must differ.");
-        TrackEdit([&] { if(tool==Tool::Finish) { track.track.finish=gate; track.track.hasFinish=true; } else track.track.checkpoints.push_back(gate); }); gateStart.reset();
+        const Racing2D::Gate placed{*gateStart,p};
+        if((placed.b-placed.a).Length()<.1) throw std::invalid_argument("Gate endpoints must be at least 0.1 meters apart.");
+        const bool finish=tool==Tool::Finish;
+        TrackEdit([&] { if(finish) { track.track.finish=placed; track.track.hasFinish=true; } else track.track.checkpoints.push_back(placed); },false,true);
+        this->gate=finish ? 0 : static_cast<int>(track.track.checkpoints.size()); gateStart.reset(); tool=Tool::Select;
     }
 }
 void Editor::UseAsset(bool vehicle) { TrackEdit([&] { if(vehicle) track.vehicle=model.scene; else track.decoration=model.scene; }); }

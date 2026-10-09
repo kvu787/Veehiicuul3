@@ -32,6 +32,9 @@ struct NurbsOutline
     std::array<double,3> colorSrgb{.35,.45,.25};
 };
 struct Gate { Point a,b; }; // Directed: progress crosses from negative to positive side.
+struct GatePlacement { Point center; double headingDegrees=0,width=1; }; // Heading is the left-facing crossing normal.
+GatePlacement DescribeGate(Gate gate);
+Gate PlaceGate(GatePlacement placement);
 struct Pose { Point position; double heading=0; }; // CCW radians from +X.
 struct Triangle { Point a,b,c; };
 struct Track

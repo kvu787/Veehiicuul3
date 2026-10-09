@@ -79,6 +79,14 @@ namespace HeadlessRuntime
     {
         if(kind.empty()) return;
         if(!Configured()) Fail("reporting policy was not installed");
+        bool known=kind==L"invalid-parameter" || kind==L"worker-invalid-parameter" || kind==L"terminate" || kind==L"abort";
+#ifdef _DEBUG
+        known=known || kind==L"assert" || kind==L"wide-assert" || kind==L"error" || kind==L"checked-iterator";
+#endif
+        if(!known) { std::fputs("Unknown headless CRT probe.\n",stderr); std::_Exit(32); }
+        std::fputs("Headless CRT probe: ",stderr);
+        for(const auto character:kind) std::fputc(static_cast<char>(character),stderr);
+        std::fputc('\n',stderr); std::fflush(stderr);
         if(kind==L"invalid-parameter") _invalid_parameter_noinfo_noreturn();
         if(kind==L"worker-invalid-parameter") { std::thread worker([] { _invalid_parameter_noinfo_noreturn(); }); worker.join(); }
         if(kind==L"terminate") std::terminate();
@@ -89,6 +97,6 @@ namespace HeadlessRuntime
         if(kind==L"error") _CrtDbgReport(_CRT_ERROR,"HeadlessProbe",0,nullptr,"Controlled error probe.");
         if(kind==L"checked-iterator") { std::vector<int> values(2); (void)(values.begin()+3); }
 #endif
-        Fail("unknown or nonterminating probe");
+        std::fputs("Headless CRT probe unexpectedly continued.\n",stderr); std::_Exit(32);
     }
 }

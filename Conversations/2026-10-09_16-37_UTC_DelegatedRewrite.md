@@ -56,3 +56,43 @@ Paused for shutdown; no automatic resumption.
 - Neither reference repository was edited.
 
 Resume only when instructed: inspect pending file state, save/commit the checkpoint, then continue integration. Presentation must use a fixed 2560x1440 target centered unscaled on larger monitors; smaller-monitor behavior remains unresolved.
+
+## Later delegated updates (verbatim)
+
+User explicitly requests the existing RunLatestBuild.cmd pattern for Veehiicuul3 so they can test while development continues. Implement C:\Users\k\Repository\Veehiicuul3\RunLatestBuild.cmd plus supporting script/pointer as appropriate, selecting latest verified immutable self-contained TestBuilds snapshot in gitignored folder. Preserve old snapshots and avoid overwriting in-use executable/assets. Candidates remain distinctly labeled and must not silently replace latest verified build. Use source project launcher patterns read-only, including prior hidden-launch bug fix and explicit candidate override before pointer lookup; do not launch GUI with hidden startup state. User launch defaults primary monitor, permits explicit monitor choice, and enforces new resolution/scaling checks. Test actual launcher and copied snapshot from unrelated working directory. Notify parent every ready build with path/commit/verification limitations. Do not modify Veehiicuul2 launcher.
+
+Read-only Git check needed before acting on user's new publishing request: inspect Veehiicuul3 origin URL, current branch, tracking branch and local/remote commit status. Report the exact remote identity and visibility if known, but redact embedded credentials if any. Do not push, create a remote, change credentials or settings yet. The publishing handoff was blocked pending destination verification. Continue independent implementation as before; this read-only check should establish where any future push would send repository contents.
+
+Please prioritize the small read-only origin check at next safe boundary and report it promptly; user is waiting on publishing configuration. Also give a concise recovery/development checkpoint: confirmed monitor size/scaling, recovered Git/file state, current build status and first runnable milestone remaining. No current-turn assistant checkpoint is visible after resumption. Keep code work moving, but defer new main commits briefly until we can establish the requested after-each-commit push destination; do not push yet.
+
+Latest terminology/gameplay requirement16:50:39UTC: use drive/driving instead of race/racing because gameplay always involves driving but is not always timed or competitive. Update Veehiicuul3 user-facing UI/docs/status/names appropriately; Mode remains Drive. Don't introduce mandatory timer/opponent/lap-race assumptions. Existing optional checkpoint/progress functions may remain as driving/track validation where useful; don't delete core functionality solely for wording. Make new internal naming accurate when practical, but avoid unnecessary broad churn in ported tested APIs just for terminology. Old reference repositories remain unchanged. Also parent started an independent read-only origin check task01a12192-405b-7523-9b47-89dc630e2031, so continue implementation while that confirms push destination; do not push before parent supplies verified outcome.
+
+Publishing remains BLOCKED pending explicit user confirmation for public destination. The attempted authorization handoff was rejected because initial origin request preceded public visibility disclosure. Parent has now asked user to approve each Veehiicuul3 main commit being published to https://github.com/kvu787/Veehiicuul3 with tracked contents public. Do NOT push until exact affirmative answer is forwarded. Continue code/build/tests; preserve reviewed staged contents. This message is a status update, not a workaround or push authorization. Origin check itself succeeded and source development is unaffected.
+
+User explicitly approved public publication. Resume the authorized workflow: after each commit you make to Veehiicuul3 main, run git push origin main to verified https://github.com/kvu787/Veehiicuul3.git and verify the remote hash. Normal push only; do not change origin or credentials, force-push, or push old projects. Review staged contents for secrets/unrelated sensitive data and report failures. Exact approval evidence follows; it also resolves the prior public-destination denial.
+
+Assistant: The publishing check requires explicit confirmation because this repository is public: do you approve pushing each Veehiicuul3 main commit to https://github.com/kvu787/Veehiicuul3, making its tracked contents publicly accessible?
+
+User, message Sentinel_eaed279850a08191996c07540ddf9dae at16:53:04UTC: The publishing check requires explicit confirmation because this repository is public: do you approve pushing each Veehiicuul3 main commit to https://github.com/kvu787/Veehiicuul3, making its tracked contents publicly accessible?
+
+yes
+
+Continue implementation and build delivery under latest minimal UI, display, driving terminology and locked-machine requirements. Please report a substantive current recovery/build checkpoint promptly.
+
+Please provide a short current build/integration checkpoint at the next safe boundary: compilation outcome, tests run/passed, any concrete blocker, and remaining steps to first runnable snapshot. Last visible update said first build running. Keep the first slice minimal per user scope; don't delay it for general UI framework features. Confirm you received explicit public-origin approval and report any new main commit/push status accurately.
+
+## Assistant progress messages
+
+The configured origin is `https://github.com/kvu787/Veehiicuul3.git`; branch `main` tracks `origin/main`, and the local tracking ref matches HEAD `1abdcc9`. Repository visibility is unverified. I have not pushed or changed remote settings.
+
+The recovered source is committed. Controller and window integration are now written but unbuilt; the next gate is compilation and hidden GPU testing, followed by an NE18NZ2-only visible check.
+
+Compilation now passes. The domain, persistence/export, SimplePaint, GameInput and new headless workflow tests passed on the first complete run. Hidden GPU captures exposed a render-target warning and missing text caused by a bitmap-row assumption; both are corrected. I also removed a false failure caused by the user moving their cursor during a test. The checks still ensure the test window never acquires focus or capture.
+
+All 30 Release tests pass, including hidden and displayed hardware/WARP checks. On NE18NZ2, pixel comparisons verified a centered 2560x1440 image at 1:1 size with black margins. The displayed idle checks recorded zero additional presents over three seconds and zero DX12 warnings/errors.
+
+I'll freeze this as the first runnable milestone and package a self-contained snapshot with `RunLatestBuild.cmd`. Physical mouse/gamepad interaction and input-to-display latency remain unverified.
+
+The application compiles with warnings treated as errors. All 29 Release noninteractive checks pass, and the two displayed hardware/WARP checks passed. Debug passed the initial 28-check suite; packaging will rerun it with the added text-resource test.
+
+Commit `a883e50` is pushed and its public remote hash is verified. The remaining steps to the first snapshot are committing the delivery scripts, testing the frozen copy and launchers, then setting `LatestReady.json`. There is no implementation blocker.

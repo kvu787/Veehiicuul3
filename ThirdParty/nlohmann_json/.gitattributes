@@ -1,0 +1,3 @@
+# Preserve the upstream header checksum and normalized license on checkout.
+include/nlohmann/json.hpp -text
+LICENSE.MIT -text

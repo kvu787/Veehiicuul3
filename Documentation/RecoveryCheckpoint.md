@@ -1,0 +1,11 @@
+# Recovery checkpoint - 2026-10-09
+
+Feature work paused immediately for the user's shutdown/BIOS change request. The in-flight Editor.h/Editor.cpp patch did not arrive; both files were confirmed absent on reconnect. No build or application test was started before shutdown. No source from either stopped reference project was modified. The existing target HEAD was 0265b5d.
+
+The recovered files include explicit copies of domain, source asset, SimplePaint, GameInput, display-correlation and regression-test modules, a minimal shared UI state, DirectWrite coverage atlas, shaders, and partial DX12 offscreen/presentation integration. Main.cpp, App.cpp and the Editor controller are still absent. The configured target therefore cannot build yet. This is source recovery, not a runnable or verified milestone.
+
+Latest requirements supersede the earlier fill discussion: actual 2560x1440 internal DX12 rendering; a borderless monitor-sized window; centered 1:1 presentation on a monitor large enough; black margins must not hit application controls. NE18NZ2 has been changed by the user to 3840x2400, so expected margins are 640 each side and 480 top/bottom. Smaller-display policy is unresolved: fail clearly instead of changing desktop mode or clipping. User launches default to Windows primary display and support explicit monitor selection.
+
+No Tab navigation, accessibility provider, general widget framework, IME/rich-text infrastructure, docking or animation framework. Essential active numeric editing, safe pointer capture/cancel/cursor restore, raw infinite paint dragging and numeric-only drag speed remain in scope. Common Controls, ImGui, Qt, WinUI, web/Electron, D3D11 and D3D11On12 are excluded. DirectWrite is CPU shaping/rasterization; every GPU pass uses DX12.
+
+Resume after the user's explicit return: verify NE18NZ2 identity/desktop dimensions and session state, commit this recovered source, implement the controller and window integration, repair/verify the GPU resource path, then build/tests and immutable candidates. Hidden/offscreen and headless checks continue if a session later locks. Visible checks remain gated, exclusively NE18NZ2, without taking the user's focus/cursor. Physical GameInput/display latency is still pending; protocol tests do not verify that measurement.

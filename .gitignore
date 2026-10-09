@@ -1,0 +1,6 @@
+BuildOutput/
+LogOutput/
+*.user
+.vs/
+Exports/
+TestBuilds/

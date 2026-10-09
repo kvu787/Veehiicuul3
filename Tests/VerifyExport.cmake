@@ -1,0 +1,5 @@
+get_filename_component(ConsumerName "${SOURCE}" NAME_WE)
+execute_process(COMMAND "${COMPILER}" /nologo /std:c++20 /EHsc /c "/I${OUTPUT}" "${SOURCE}" "/Fo${OUTPUT}/${ConsumerName}.obj" RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "The actual exported C++ header did not compile: ${output}${errors}")
+endif()

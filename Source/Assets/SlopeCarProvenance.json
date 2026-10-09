@@ -1,0 +1,48 @@
+{
+  "SourceObject": "Car",
+  "SourceModifiers": 0,
+  "SourceVertices": 962,
+  "SourcePolygons": 867,
+  "RuntimeVertices": 1938,
+  "RuntimeIndices": 5652,
+  "RuntimeVertexIndexSha256": "187701d56bd6e77ccd27990d79bd7b0061ab17de5a13e1b451b32e7a09b5df9e",
+  "SourceBlendSha256": "f22aa574a4655d00521bb351c77709a454aff9c855a90019fb5e7d8421671c8a",
+  "SettingsSha256": "eea27f1bebdaa2eec252da47184554b8b88d0f005deac981ec49fea2af7a773e",
+  "Parts": [
+    {
+      "Name": "SlopeCarAxles",
+      "Vertices": 64,
+      "Polygons": 36,
+      "RenderVertices": 128,
+      "Triangles": 120
+    },
+    {
+      "Name": "SlopeCarBodyBlue",
+      "Vertices": 268,
+      "Polygons": 136,
+      "RenderVertices": 558,
+      "Triangles": 532
+    },
+    {
+      "Name": "SlopeCarCabinBlue",
+      "Vertices": 234,
+      "Polygons": 119,
+      "RenderVertices": 472,
+      "Triangles": 464
+    },
+    {
+      "Name": "SlopeCarHeadlights",
+      "Vertices": 132,
+      "Polygons": 192,
+      "RenderVertices": 260,
+      "Triangles": 256
+    },
+    {
+      "Name": "SlopeCarWheels",
+      "Vertices": 264,
+      "Polygons": 384,
+      "RenderVertices": 520,
+      "Triangles": 512
+    }
+  ]
+}

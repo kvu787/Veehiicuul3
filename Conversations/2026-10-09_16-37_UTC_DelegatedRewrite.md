@@ -204,3 +204,21 @@ Track surface colors already persist as explicit unlit sRGB values. I'll bind th
 The new tests caught a range mismatch: SimplePaint reserves margins at 0 and 1, while unlit RGB must allow exact black and white. I'm correcting the drag path to use the unlit range and keeping the existing SimplePaint ranges unchanged.
 
 All 30 noninteractive checks now pass, including the new RGB transaction test and hidden hardware/WARP runs. They cover exact black/white, fine-drag precision, clean versus dirty state, cancellation, undo/redo, save/reload, and Drive transitions. I'm adding clipped-slider and focus-loss coverage before the final packaging gates.
+
+All 32 committed-source Release checks passed, including displayed hardware/WARP checks on NE18NZ2. The RGB regressions passed for focus/capture loss and 1-4 pixel clipped release/Escape, and preview/cancel left the geometry revision unchanged. Debug and copied-build checks are running; the ready pointer still selects the previous build.
+
+The RGB build is ready at `C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_18-42-22-494_d06efa01d3f4`; `RunLatestBuild.cmd` now selects it.
+
+Source commit: `d06efa01d3f4` (the full hash is in `BuildInfo.json`). Release passed all 32 checks, Debug passed 30, and copied hardware/WARP checks passed hidden and displayed on NE18NZ2. It includes RGB numeric/relative editing and an edited circuit example. Physical input and display-latency validation remain pending.
+
+The frozen build passed the actual CMD launcher check too: all 119 instrumented submissions were S_OK, with zero idle presents and zero GPU warnings. All 98 hashes match, all 99 files are read-only, and the older snapshots remain intact. The next core binding is selected-outline degree editing with valid periodic-knot regeneration.
+
+## Parent milestone checkpoint request (verbatim)
+
+Please send a concise outline RGB milestone checkpoint at next safe boundary: implementation and tests completed, remaining packaging steps or blocker. No current-turn assistant status is visible after about20minutes. Keep scope to the small existing color-editing workflow and deliver its runnable snapshot once verified; no framework extras. Local commits only.
+
+## Assistant checkpoint response (verbatim)
+
+RGB implementation and packaging are complete. The verified snapshot is ready, with no packaging blocker: Release 32/32, Debug 30/30, copied hardware/WARP checks and the actual CMD launcher all passed. I'm handing off its exact path and the remaining manual limits now.
+
+The RGB milestone is complete and packaged. RunLatestBuild.cmd selects TestBuilds/2026-10-09_18-42-22-494_d06efa01d3f4, source d06efa01d3f4c0adcf85d217d3f2249087c0b3f1; functional code commit 686aeefc8fd9a8ff51885c7480e78a2807041fa5. Release passed 32/32; Debug passed 30/30; copied hidden/displayed hardware/WARP and actual CMD launcher checks passed. Exact unlit black/white and RGB preview/undo/redo/cancel, dirty-state, save/reload and Drive consistency are covered. Geometry remains built across color-only changes. All 98 hashes match; 99 files are read-only. No packaging blocker remains. Physical mouse/gamepad, actual notification delivery and display latency remain pending. Next core binding: selected-outline degree editing with valid periodic-knot regeneration. References remain unchanged and every new commit is local.

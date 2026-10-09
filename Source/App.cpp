@@ -1017,12 +1017,12 @@ void App::TestModeScroll()
     mode(ModelMode); Command(RedoAction); Require(SerializeScene(editor_.model.scene)==redoModel,"Model scroll changed the retained redo operation."); Command(UndoAction); SaveModel(options_.session/"ModeScroll.modeler"); clean();
     // Isolate later workflow fixtures; application mode changes never reset
     // these positions and no timer is used for restoration.
-    mode(TrackMode); Interface();
-    Require(!editor_.track.decorations.empty() && ui_.Find(RemoveDecoration),"Content-shrink fixture has no selected decoration."); wheel(-30000);
+    mode(TrackMode); Command(DecorationTool); pointer(WM_LBUTTONDOWN,1500,650); pointer(WM_LBUTTONUP,1500,650);
+    Require(!editor_.track.decorations.empty() && ui_.Find(RemoveDecoration),"Routed placement did not create the content-shrink fixture."); const auto placed=SerializeTrack(editor_.track); wheel(-30000);
     const auto bottom=ui_.scroll; const auto* remove=ui_.Find(RemoveDecoration); const auto removal=Ui::Intersect(remove->rect,remove->clip);
     Require(removal.h>0,"Bottom deletion button was clipped."); pointer(WM_LBUTTONDOWN,removal.x+8,removal.y+2); pointer(WM_LBUTTONUP,removal.x+8,removal.y+2);
     Require(modifiedTrack_ && ui_.scroll<bottom && ui_.scroll==std::max(0.f,ui_.contentHeight-ui_.panel.h) && modeScroll_[1]==ui_.scroll && ui_.capture==0,"Routed content deletion waited for a frame to clamp layout/scroll/capture.");
-    Command(UndoAction); Interface(); SaveTrackProject(options_.session/"ModeScroll.track"); Require(SerializeTrack(editor_.track)==track && !modifiedTrack_,"Content deletion undo/save failed to restore its fixture.");
+    Command(UndoAction); Require(SerializeTrack(editor_.track)==placed,"Content deletion undo did not restore the placed decoration."); Command(UndoAction); Interface(); SaveTrackProject(options_.session/"ModeScroll.track"); Require(SerializeTrack(editor_.track)==track && !modifiedTrack_,"Content placement/deletion undo/save failed to restore its fixture.");
     modeScroll_.fill(0); ui_.SetScroll(0); Interface();
     std::ofstream(options_.session/"ModeScrollVerification.txt")<<"Own-HWND wheel/Mode menu routing retained independent Model/Track/Drive positions\n"
         <<"Current compact Drive fits; shorter-panel fixture verified a nonzero Drive position without drawing\n"

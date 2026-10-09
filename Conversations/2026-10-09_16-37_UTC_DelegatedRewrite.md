@@ -510,3 +510,29 @@ The source audit also found legacy functions beyond scroll restoration: model du
 Debug passed 76/76. The final regression adds a real sidebar deletion to check that content shrink clamps immediately, before another frame. Layout now refreshes after pointer releases and completed keyboard actions.
 
 The changes are committed locally. I'll package clean source next, then verify the copied hardware/WARP builds and launcher.
+
+## Assistant packaging and diagnostic progress (verbatim)
+
+The package gate stopped on a fixture error: Example circuit has no placed decoration, so the new deletion test had nothing to remove. LatestReady still points to the camera build. I'll place a decoration through the application's routed input, delete it, and undo both actions before rerunning the gate.
+
+The corrected scroll workflow passed. The focused hidden run then failed the strict Present check with `0x087A0001`, which the installed Windows SDK identifies as `DXGI_STATUS_OCCLUDED`. That submission remains unaccepted. I'm preserving the log and checking the displayed NE18NZ2 path; the S_OK assertion stays unchanged.
+
+## Parent current stage request and review result (verbatim)
+
+Please share the current scroll-restoration implementation/test stage and any blocker, then continue. Independent review of frozen camera/guard build 2d889e147159 found no actionable defects. It verified saved evidence and scoped guard coverage to owned CRT paths, excluding external SDK runtimes/build tools.
+
+## Assistant status and continuing progress (verbatim)
+
+Scroll restoration is implemented in local commit `731ac2a`: three saved positions, shrink clamping, immediate hit/layout synchronization and draft-safe Mode routing. The initial Release and Debug runs passed 72/72 and 76/76; the final routed deletion fixture is corrected and its scroll checks pass.
+
+Packaging is blocked by the strict Present check returning `DXGI_STATUS_OCCLUDED` (`0x087A0001`). I'm comparing the frozen camera build under the same conditions and preserving the failures without relaxing S_OK acceptance. The independent review cleared camera/guard build `2d889e147159`; it does not cover the new scroll code.
+
+The frozen camera build reproduced the same occlusion status, and WARP did too. That makes a scroll regression less likely, but the delivery gate is still blocked. I'll check the smoke launcher and window visibility next. No monitor, focus, cursor or security settings are being changed.
+
+The smoke probe showed a visible, uncloaked, nonminimized window entirely on NE18NZ2, without foreground ownership, yet Present still reported occlusion. The underlying display condition is unresolved.
+
+I'll finish the Debug checks and preserve an immutable candidate with the failure evidence. It will remain unready, and LatestReady will stay on the reviewed camera snapshot.
+
+The current Debug suite passed 76/76, including both hidden GPU workflows. Release smoke still returns occlusion, so displayed delivery remains blocked. I'll freeze the candidate with those results and leave LatestReady unchanged.
+
+The parity inventory now lists the remaining legacy actions, tool/default differences, unnecessary road invalidation on non-shape edits, and manual input/display/power checks.

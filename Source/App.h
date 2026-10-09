@@ -51,6 +51,7 @@ private:
     void TestTrackColors();
     void TestTrackDegrees();
     void TestTrackKnots();
+    void TestGatePlacements();
     void TestUiTransactions();
     void TestProductionLoop();
     void TestWorkflow();
@@ -65,6 +66,8 @@ private:
     Ui::State ui_;
     Ui::Schedule schedule_;
     Ui::Visibility visibility_;
+    bool driveReady_=false; // Recomputed when Mode opens; driving/menu hover never reruns asset/race validation.
+    std::optional<Racing2D::GatePlacement> gateDraft_;
     TextAtlas text_;
     Renderer renderer_;
     Win32SliderPointerPlatform pointerPlatform_;

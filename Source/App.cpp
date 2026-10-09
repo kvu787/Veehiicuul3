@@ -8,6 +8,7 @@
 #include <sstream>
 #include <cstring>
 #include <numbers>
+#include <limits>
 #include <thread>
 
 namespace
@@ -22,6 +23,8 @@ constexpr int ObjectFirst=1000,MaterialFirst=1100,OutlineFirst=1200,PointFirst=1
 constexpr int OutlineColorFirst=3100,OutlineColorSliderFirst=3110;
 constexpr int OutlineDegree=3120;
 constexpr int OutlineKnots=3130,ApplyKnots=3131,CancelKnots=3132;
+constexpr int GateFirst=1500,GateX=3150,GateY=3151,GateHeading=3152,GateWidth=3153;
+constexpr int ApplyGate=3154,CancelGate=3155;
 bool OutlineColorSlider(int id) { return id>=OutlineColorSliderFirst && id<OutlineColorSliderFirst+3; }
 std::wstring Wide(const std::string& s)
 {
@@ -187,6 +190,18 @@ void App::Interface()
         label(L"Vehicle start"); number(SpawnX,L"Start X",editor_.track.track.spawn.position.x,-10000,10000); number(SpawnY,L"Start Y",editor_.track.track.spawn.position.y,-10000,10000); number(SpawnHeading,L"Heading (rad)",editor_.track.track.spawn.heading,-10000,10000); number(VehicleScale,L"Vehicle scale",editor_.track.vehicleScale,.05,10);
         number(DeadzoneX,L"Stick deadzone X",editor_.track.deadzoneX,0,.94999); number(DeadzoneY,L"Stick deadzone Y",editor_.track.deadzoneY,0,.94999);
         label(L"Checkpoints: "+std::to_wstring(editor_.track.track.checkpoints.size())); button(RemoveCheckpoint,L"Remove last checkpoint",!editor_.track.track.checkpoints.empty());
+        label(L"Select checkered line / checkpoint");
+        button(GateFirst,L"Checkered line",editor_.track.track.hasFinish,editor_.gate==0);
+        for(size_t i=0;i<editor_.track.track.checkpoints.size();++i) button(GateFirst+1+static_cast<int>(i),L"Checkpoint "+std::to_wstring(i+1),true,editor_.gate==static_cast<int>(i+1));
+        if(editor_.GateSelected())
+        {
+            const auto placement=gateDraft_ ? *gateDraft_ : Racing2D::DescribeGate(editor_.SelectedGate());
+            label(L"Heading is the crossing arrow."); label(L"0 deg -> +X; 90 deg -> +Y");
+            number(GateX,L"Gate center X",placement.center.x,-10000,10000); number(GateY,L"Gate center Y",placement.center.y,-10000,10000);
+            number(GateHeading,L"Heading (deg)",placement.headingDegrees,-std::numeric_limits<double>::max(),std::numeric_limits<double>::max());
+            number(GateWidth,L"Width (m)",placement.width,.1,1000);
+            button(ApplyGate,L"Apply gate"); button(CancelGate,L"Cancel gate edit",gateDraft_.has_value() || (ui_.focus>=GateX && ui_.focus<=GateWidth));
+        }
         label(L"Decorations");
         for(size_t i=0;i<editor_.track.decorations.size();++i) button(DecorFirst+static_cast<int>(i),L"Decoration "+std::to_wstring(i+1),true,editor_.decoration==static_cast<int>(i));
         if(editor_.decoration>=0 && static_cast<size_t>(editor_.decoration)<editor_.track.decorations.size())
@@ -204,7 +219,7 @@ void App::Interface()
     {
         const float x=menu_==1 ? 12.f : 137.f; float my=60;
         auto popup=[&](int id,const wchar_t* name,bool enabled=true,bool selected=false) { Ui::Control c; c.id=id; c.kind=Ui::Kind::Button; c.rect={x,my,340,42}; c.clip=all; c.text=name; c.enabled=enabled; c.selected=selected; ui_.Add(c,false); my+=44; };
-        if(menu_==1) { popup(ModelMode,L"Model builder",true,editor_.mode==EditorMode::ModelBuilder); popup(TrackMode,L"Track builder",true,editor_.mode==EditorMode::TrackBuilder); popup(DriveMode,L"Drive",editor_.generated.has_value(),editor_.mode==EditorMode::Drive); }
+        if(menu_==1) { popup(ModelMode,L"Model builder",true,editor_.mode==EditorMode::ModelBuilder); popup(TrackMode,L"Track builder",true,editor_.mode==EditorMode::TrackBuilder); popup(DriveMode,L"Drive",driveReady_,editor_.mode==EditorMode::Drive); }
         else { const bool model=editor_.mode==EditorMode::ModelBuilder,editing=editor_.mode!=EditorMode::Drive; popup(NewCar,L"New SlopeCar",model); popup(NewPrimitive,L"New primitive scene",model); popup(OpenProject,L"Open...",editing); popup(SaveFile,L"Save",editing); popup(SaveAs,L"Save as...",editing); popup(ExportFile,L"Export C++ mesh...",model); }
     }
 }
@@ -249,6 +264,7 @@ void App::Actions(const std::vector<Ui::Action>& actions)
 }
 void App::Mode(EditorMode mode)
 {
+    if(mode==EditorMode::Drive && gateDraft_) { status_=L"Apply or cancel the gate draft before Drive."; Redraw(); return; }
     Abort(); editor_.Mode(mode); ui_.scroll=0; ui_.focus=0; held_.fill(false); accumulator_=0; resetClock_=true;
     schedule_.active=mode==EditorMode::Drive && foreground_;
     gamepad_.SetForeground(schedule_.WantsTimer());
@@ -264,13 +280,14 @@ void App::Mode(EditorMode mode)
 void App::Command(int id,double value)
 {
     menu_=(id==ModeMenu) ? (menu_==1 ? 0 : 1) : (id==FileMenu) ? (menu_==2 ? 0 : 2) : 0;
-    if(id==ModeMenu || id==FileMenu) { Redraw(); return; }
+    if(id==ModeMenu || id==FileMenu) { if(menu_==1) driveReady_=!gateDraft_ && editor_.CanDrive(); Redraw(); return; }
     if(id==ModelMode || id==TrackMode || id==DriveMode) { Mode(id==ModelMode ? EditorMode::ModelBuilder : id==TrackMode ? EditorMode::TrackBuilder : EditorMode::Drive); return; }
     if(id==QuitAction) { PostMessageW(window_,WM_CLOSE,0,0); return; }
     if(id==FrameAction || id==FrameSelectedAction) { editor_.Frame(id==FrameSelectedAction); Change(false); return; }
     if(id==CageAction) { editor_.cage=!editor_.cage; Change(false); return; }
     if(id==UndoAction || id==RedoAction)
     {
+        gateDraft_.reset();
         if(!editor_.CanUndo(id==RedoAction)) { Redraw(); return; }
         const bool geometry=editor_.Undo(id==RedoAction);
         if(editor_.mode==EditorMode::ModelBuilder) modifiedModel_=true; else modifiedTrack_=true;
@@ -283,6 +300,7 @@ void App::Command(int id,double value)
     else if(id>=OutlineFirst && id<OutlineFirst+6) { editor_.outline=id-OutlineFirst; editor_.point=0; Change(false); return; }
     else if(id>=PointFirst && id<PointFirst+64) { editor_.point=id-PointFirst; Change(false); return; }
     else if(id>=DecorFirst && id<DecorFirst+16) { editor_.decoration=id-DecorFirst; Change(false); return; }
+    else if(id>=GateFirst && id<=GateFirst+32) { gateDraft_.reset(); editor_.gate=id-GateFirst; Change(false); return; }
     else if(id==AddBox || id==AddPlane || id==AddCylinder) editor_.AddShape(id-AddBox);
     else if(id==ObjectTarget || id==VertexTarget || id==FaceTarget) { editor_.model.selection.mode=id==ObjectTarget ? SelectionMode::Object : id==VertexTarget ? SelectionMode::Vertex : SelectionMode::Face; editor_.model.selection.vertices.clear(); editor_.model.selection.face=-1; Change(false); return; }
     else if(id==RefineAction) editor_.Refine(); else if(id==ExtrudeAction) editor_.Extrude(); else if(id==CopyPaint) editor_.CopyMaterial(); else if(id==AssignPaint) editor_.AssignMaterial();
@@ -301,6 +319,31 @@ void App::Command(int id,double value)
     }
     else if(id==ApplyKnots) { if(ui_.focus==OutlineKnots) Actions(ui_.Commit()); else Redraw(); return; }
     else if(id==CancelKnots) { Actions(ui_.Cancel()); Redraw(); return; }
+    else if(id>=GateX && id<=GateWidth)
+    {
+        auto placement=gateDraft_ ? *gateDraft_ : Racing2D::DescribeGate(editor_.SelectedGate());
+        if(!std::isfinite(value) || ((id==GateX || id==GateY) && std::abs(value)>10000) || (id==GateWidth && (value<.1 || value>1000))) throw std::invalid_argument("Gate fields require finite coordinates within +/-10000 and width in [0.1,1000].");
+        switch(id) { case GateX:placement.center.x=value;break;case GateY:placement.center.y=value;break;case GateHeading:placement.headingDegrees=value;break;case GateWidth:placement.width=value;break; }
+        gateDraft_=placement; Redraw(); status_=L"Gate draft: Apply gate commits all four fields; Cancel/Esc discards it.";
+        return;
+    }
+    else if(id==ApplyGate)
+    {
+        if(!gateDraft_) { Redraw(); return; }
+        try
+        {
+            const bool changed=editor_.SetGatePlacement(*gateDraft_); gateDraft_.reset();
+            if(changed) { modifiedTrack_=true; Change(editor_.gate==0); status_=L"Gate applied; built road surfaces kept. Its arrow is the crossing direction; Drive validates the placement."; }
+            else { Redraw(); status_=L"Gate unchanged; authored data and history kept."; }
+        }
+        catch(const std::invalid_argument& e) { status_=L"Gate rejected: "+Wide(e.what())+L" Previous gate kept; correct the fields or Cancel."; ui_.invalid=true; Redraw(); }
+        return;
+    }
+    else if(id==CancelGate)
+    {
+        gateDraft_.reset(); Actions(ui_.Cancel()); status_=L"Gate draft cancelled; authored state kept."; Redraw();
+        return;
+    }
     else if(id>=OutlineColorFirst && id<OutlineColorFirst+3)
     {
         editor_.PreviewOutlineColor(static_cast<unsigned>(id-OutlineColorFirst),value);
@@ -317,10 +360,11 @@ void App::Command(int id,double value)
         const auto original=MakeSlopeCarScene(); const auto identity=editor_.Object().sourceMaterial;
         for(const auto& object:original.objects) if(object.sourceMaterial==identity) { editor_.ModelEdit([&] { editor_.Material().paint=object.paint; }); break; }
     }
-    else if(id==NewTrack || id==ExampleTrack) { editor_.NewTrack(id==ExampleTrack); trackPath_.clear(); }
+    else if(id==NewTrack || id==ExampleTrack) { gateDraft_.reset(); editor_.NewTrack(id==ExampleTrack); trackPath_.clear(); }
     else if(id==BuildTrack) editor_.BuildTrack();
     else if(id==SelectTool || id==OutlineTool || id==SpawnTool || id==FinishTool || id==CheckpointTool || id==DecorationTool)
     {
+        gateDraft_.reset();
         editor_.tool=id==SelectTool ? Editor::Tool::Select : id==OutlineTool ? Editor::Tool::Outline : id==SpawnTool ? Editor::Tool::Spawn : id==FinishTool ? Editor::Tool::Finish : id==CheckpointTool ? Editor::Tool::Checkpoint : Editor::Tool::Decoration;
         status_=L"Click in the viewport. Ground plane coordinates are in meters; gate order is preserved."; Change(false); return;
     }
@@ -328,7 +372,7 @@ void App::Command(int id,double value)
     else if(id==CancelDraft) { editor_.draft.clear(); editor_.gateStart.reset(); Change(false); return; }
     else if(id==UseVehicle || id==UseDecoration) editor_.UseAsset(id==UseVehicle);
     else if(id==RemoveOutline) editor_.TrackEdit([&] { editor_.track.track.outlines.erase(editor_.track.track.outlines.begin()+editor_.outline); editor_.outline=std::min(editor_.outline,static_cast<int>(editor_.track.track.outlines.size())-1); editor_.point=0; });
-    else if(id==RemoveCheckpoint) editor_.TrackEdit([&] { editor_.track.track.checkpoints.pop_back(); });
+    else if(id==RemoveCheckpoint) { gateDraft_.reset(); editor_.TrackEdit([&] { editor_.track.track.checkpoints.pop_back(); },false,true); editor_.gate=std::min(editor_.gate,static_cast<int>(editor_.track.track.checkpoints.size())); if(editor_.gate==0 && !editor_.track.track.hasFinish) editor_.gate=-1; }
     else if(id==RemoveDecoration) editor_.TrackEdit([&] { editor_.track.decorations.erase(editor_.track.decorations.begin()+editor_.decoration); editor_.decoration=0; });
     else if(id>=SpawnX && id<=DeadzoneY)
     {
@@ -408,6 +452,11 @@ void App::Overlay()
         auto gate=[&](Racing2D::Gate g,Vector3 color) { Line(geometry_.cage,World(g.a),World(g.b),color); const auto e=g.b-g.a; const auto n=Racing2D::Point{-e.y,e.x}*(1/e.Length()); const auto center=(g.a+g.b)*.5; Line(geometry_.cage,World(center),World(center+n*2),color); };
         if(editor_.track.track.hasFinish) gate(editor_.track.track.finish,{.03f,.35f,.4f});
         for(size_t i=0;i<editor_.track.track.checkpoints.size();++i) gate(editor_.track.track.checkpoints[i],editor_.mode==EditorMode::Drive && i==editor_.race.State().nextCheckpoint ? Vector3{.75f,.3f,.005f} : Vector3{.02f,.4f,.08f});
+        if(editor_.mode==EditorMode::TrackBuilder && editor_.GateSelected())
+        {
+            const auto g=editor_.SelectedGate(); const auto p=World((g.a+g.b)*.5,.12f); const auto r=camera.height*.007f;
+            Line(geometry_.cage,p-Vector3{r,0,0},p+Vector3{r,0,0},{.7f,.06f,.01f}); Line(geometry_.cage,p-Vector3{0,0,r},p+Vector3{0,0,r},{.7f,.06f,.01f});
+        }
     }
 }
 void App::Draw(bool present)
@@ -513,6 +562,7 @@ POINT App::SliderPoint() const
 }
 void App::Abort(bool restore)
 {
+    gateDraft_.reset();
     const bool changedGeometry=modelDrag_ || trackDrag_;
     restore=restore && GetForegroundWindow()==window_ && GetCapture()==window_;
     editor_.EndPaint(true); editor_.EndOutlineColor(true);
@@ -551,6 +601,13 @@ void App::Pointer(UINT message,float x,float y,WPARAM buttons)
     if(slider_ && message!=WM_LBUTTONUP) return;
     if(message==WM_LBUTTONDOWN)
     {
+        if(ui_.Editing() && ui_.focus>=GateX && ui_.focus<=GateWidth)
+        {
+            const auto target=ui_.Hit(x,y);
+            if(target==CancelGate || (target>=GateFirst && target<=GateFirst+32)) Actions(ui_.Cancel());
+            else { Actions(ui_.Commit()); if(ui_.Editing()) { Redraw(); return; } }
+            Interface();
+        }
         if(ui_.Editing() && ui_.Find(ui_.focus)->kind==Ui::Kind::KnotVector)
         {
             if(ui_.Hit(x,y)==CancelKnots) Actions(ui_.Cancel());
@@ -613,7 +670,7 @@ void App::Pointer(UINT message,float x,float y,WPARAM buttons)
 void App::Key(UINT key)
 {
     const bool ctrl=(GetKeyState(VK_CONTROL)&0x8000)!=0,shift=(GetKeyState(VK_SHIFT)&0x8000)!=0;
-    if(key==VK_ESCAPE) { if(slider_ || ui_.Editing() || modelDrag_ || trackDrag_) Abort(true); else if(editor_.mode==EditorMode::Drive) Mode(EditorMode::TrackBuilder); else { menu_=0; editor_.draft.clear(); editor_.gateStart.reset(); Change(false); } return; }
+    if(key==VK_ESCAPE) { if(slider_ || ui_.Editing() || gateDraft_ || modelDrag_ || trackDrag_) Abort(true); else if(editor_.mode==EditorMode::Drive) Mode(EditorMode::TrackBuilder); else { menu_=0; editor_.draft.clear(); editor_.gateStart.reset(); Change(false); } return; }
     if(slider_) return;
     if(ui_.Editing())
     {
@@ -654,16 +711,19 @@ void App::OpenModel(const std::filesystem::path& path)
 }
 void App::SaveTrackProject(const std::filesystem::path& path)
 {
+    if(gateDraft_) throw std::invalid_argument("Apply or cancel the gate draft before saving.");
     SaveTrack(editor_.track,path); trackPath_=path; modifiedTrack_=false;
 }
 void App::OpenTrackProject(const std::filesystem::path& path)
 {
     auto track=LoadTrack(path); editor_.TrackEdit([&] { editor_.track=track; });
-    trackPath_=path; modifiedTrack_=false; editor_.outline=0; editor_.point=0; editor_.BuildTrack(); editor_.Frame(); Change();
+    gateDraft_.reset();
+    trackPath_=path; modifiedTrack_=false; editor_.outline=0; editor_.point=0; editor_.gate=editor_.track.track.hasFinish ? 0 : editor_.track.track.checkpoints.empty() ? -1 : 1; editor_.BuildTrack(); editor_.Frame(); Change();
 }
 void App::File(int action)
 {
     if(options_.hidden || options_.smoke || editor_.mode==EditorMode::Drive) return;
+    if(gateDraft_) { status_=L"Apply or cancel the gate draft before saving/opening a project."; Redraw(); return; }
     const bool model=editor_.mode==EditorMode::ModelBuilder;
     if(!model && (!editor_.draft.empty() || editor_.gateStart)) throw std::invalid_argument("Finish or cancel the draft before saving/opening a track.");
     auto path=model ? modelPath_ : trackPath_; const bool save=action!=OpenProject;
@@ -786,7 +846,7 @@ void App::TestWorkflow()
     Command(NewPrimitive); Command(CopyPaint); editor_.model.selection.mode=SelectionMode::Face; editor_.model.selection.face=0; Command(AssignPaint); Command(PaintFirst,.7); Command(ExtrudeAction); Command(RefineAction);
     SaveScene(editor_.model.scene,options_.session/"TwoPaint.modeler"); ExportMesh(editor_.model.scene,options_.session/"TwoPaint.h");
     const auto authored=SerializeScene(editor_.model.scene); Draw(!options_.hidden); renderer_.Capture(options_.session/"Model2560x1440.bmp");
-    Mode(EditorMode::TrackBuilder); TestTrackColors(); TestTrackDegrees(); TestTrackKnots(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
+    Mode(EditorMode::TrackBuilder); TestTrackColors(); TestTrackDegrees(); TestTrackKnots(); TestGatePlacements(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
     SaveTrack(editor_.track,options_.session/"ExampleCircuit.track");
     Mode(EditorMode::Drive); for(int i=0;i<120;++i) { Tick(1./120,true); if(i%30==0) Draw(!options_.hidden); }
     Draw(!options_.hidden); renderer_.Capture(options_.session/"Drive2560x1440.bmp");
@@ -873,6 +933,8 @@ void App::TestTrackColors()
     {
         Interface(); auto& c=*std::find_if(ui_.controls.begin(),ui_.controls.end(),[](const Ui::Control& control){return control.id==OutlineColorSliderFirst;});
         c.rect={12,32.f+height,404,30}; c.clip={12,62,404,static_cast<float>(height)};
+        ui_.controls={c}; // Isolate the synthetic clipped slider from real sidebar controls under the current scroll.
+        Require(ui_.Hit(32,62.5f)==OutlineColorSliderFirst,"Synthetic clipped RGB fixture hit a different control.");
         Actions(ui_.Down(32,62.5f)); const auto point=SliderPoint();
         const auto y=point.y-presentation_.originY-static_cast<LONG>(presentation_.Image().y);
         Require(y>=62 && y<62+height,"RGB clipped cursor restore left its 1-4 pixel visible intersection.");
@@ -985,6 +1047,68 @@ void App::TestTrackKnots()
     Require(!modifiedTrack_ && SerializeTrack(editor_.track)==authored && SerializeScene(editor_.model.scene)==model && SerializeScene(editor_.track.vehicle)==vehicle,"Rebuilt knot Drive transition changed clean authoring/assets.");
     reveal(OutlineKnots); Draw(!options_.hidden); renderer_.Capture(options_.session/"OutlineKnots2560x1440.bmp");
     std::ofstream(options_.session/"OutlineKnotVerification.txt")<<"Own-window routed pointer/character/key input and Apply/Enter passed\nEquivalent vector no-op and exact sampled-boundary reuse: retained generated storage/rendering revision through undo/redo draws\nLength/nonmonotone/periodic-extension/domain/bound/nonfinite-overflow rejection retained editable draft and all prior state\nInvalid draft blocked selection click-through; Escape/Cancel/focus-loss and prior dirty state passed\nChanged boundaries invalidated; Drive disabled/rejected until successful build\nPoints/weights/degree/colors/assets/placements preserved; exact undo/redo and production save/reload/rebuilt Drive passed\nPhysical input, global clipboard delivery and real display association: pending\n";
+    trackPath_.clear();
+}
+void App::TestGatePlacements()
+{
+    Command(ExampleTrack); Draw(!options_.hidden); const auto path=options_.session/"GatePlacements.track"; SaveTrackProject(path);
+    const auto original=SerializeTrack(editor_.track),model=SerializeScene(editor_.model.scene),vehicle=SerializeScene(editor_.track.vehicle);
+    const auto surfaces=editor_.generated->surfaces[0].data(); const auto originalFinish=editor_.SelectedGate(); const auto originalPose=Racing2D::DescribeGate(originalFinish);
+    auto key=[&](UINT value) { SendMessageW(window_,WM_KEYDOWN,value,0); SendMessageW(window_,WM_KEYUP,value,0); };
+    auto reveal=[&](int id) {
+        Interface(); const auto* c=ui_.Find(id); Require(c && c->enabled,"Gate workflow control unavailable.");
+        if(c->clip.y==ui_.panel.y) { ui_.scroll+=c->rect.y-ui_.panel.y; Interface(); c=ui_.Find(id); }
+        return Ui::Intersect(c->rect,c->clip);
+    };
+    auto click=[&](int id) { const auto r=reveal(id),image=presentation_.Image(); const auto p=MAKELPARAM(static_cast<SHORT>(r.x+8+image.x),static_cast<SHORT>(r.y+4+image.y)); Message(WM_LBUTTONDOWN,MK_LBUTTON,p); Message(WM_LBUTTONUP,0,p); };
+    auto edit=[&](int id,const std::string& text,bool enter=true) {
+        click(id); key(VK_BACK); for(auto ch:text) SendMessageW(window_,WM_CHAR,static_cast<unsigned char>(ch),0);
+        Require(ui_.edit==Wide(text),"Routed gate numeric editing failed."); if(enter) key(VK_RETURN);
+    };
+    click(GateFirst); Draw(!options_.hidden); const auto revision=geometry_.revision;
+    edit(GateWidth,Racing2D::FormatKnots({originalPose.width})); click(ApplyGate); Draw(!options_.hidden);
+    Require(!modifiedTrack_ && !gateDraft_ && SerializeTrack(editor_.track)==original && geometry_.revision==revision && editor_.generated->surfaces[0].data()==surfaces,"Gate no-op changed clean authored state/history/geometry.");
+    edit(GateHeading,"360"); click(ApplyGate); Draw(!options_.hidden);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==original && geometry_.revision==revision,"Equivalent gate heading changed original endpoints or rendering revision.");
+    edit(GateX,"-3.75e0"); edit(GateY,"-18.25"); edit(GateWidth,"8"); edit(GateHeading,"180"); Draw(!options_.hidden);
+    Require(gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==original && geometry_.revision==revision,"Gate fields applied before atomic Apply.");
+    Command(ModeMenu); Interface(); Require(!ui_.Find(DriveMode)->enabled,"Drive was enabled for an unapplied gate draft."); Command(ModeMenu); Mode(EditorMode::Drive);
+    Require(editor_.mode==EditorMode::TrackBuilder && gateDraft_ && SerializeTrack(editor_.track)==original,"Pending gate draft entered Drive, was discarded or changed authoring.");
+    bool blocked=false; try { SaveTrackProject(path); } catch(const std::invalid_argument&) { blocked=true; } Require(blocked && gateDraft_ && SerializeTrack(editor_.track)==original,"Saving committed/discarded the gate draft.");
+    click(CancelGate); Draw(!options_.hidden); Require(!gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==original && geometry_.revision==revision,"Gate Cancel changed clean data/rendering geometry.");
+    edit(GateX,"-3.75"); key(VK_ESCAPE); Require(!gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==original,"Gate Escape did not cancel the whole pending form.");
+    edit(GateX,"-3.75"); SendMessageW(window_,WM_KILLFOCUS,0,0); Require(!gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==original,"Gate focus-loss cancel changed authoring.");
+    edit(GateX,"-3.75"); Mode(EditorMode::ModelBuilder); Mode(EditorMode::TrackBuilder); Require(!gateDraft_ && SerializeTrack(editor_.track)==original && SerializeScene(editor_.model.scene)==model,"Mode change committed a gate draft or changed model.");
+    click(GateFirst); edit(GateX,"-3.75"); edit(GateY,"-18.25"); edit(GateWidth,"8"); edit(GateHeading,"180"); click(ApplyGate); Draw(!options_.hidden);
+    const auto finish=SerializeTrack(editor_.track);
+    Require(modifiedTrack_ && !gateDraft_ && editor_.generated->surfaces[0].data()==surfaces && editor_.CanDrive() && shown_.objects[editor_.track.track.outlines.size()].name=="Checkered black","Atomic checkered Apply failed or dropped cached road/presentation.");
+    auto restored=editor_.track; restored.track.finish=originalFinish; Require(SerializeTrack(restored)==original,"Checkered Apply changed another gate/outlines/materials/placements.");
+    click(UndoAction); Draw(!options_.hidden); Require(modifiedTrack_ && SerializeTrack(editor_.track)==original && editor_.generated->surfaces[0].data()==surfaces,"Gate routed undo lost original endpoints or cached road.");
+    click(RedoAction); Draw(!options_.hidden); Require(SerializeTrack(editor_.track)==finish && editor_.generated->surfaces[0].data()==surfaces,"Gate routed redo failed or dropped cached road.");
+    SaveTrackProject(path); click(GateFirst+1); Require(!modifiedTrack_ && editor_.gate==1,"Gate selection dirtied track."); const auto beforeCheckpoint=SerializeTrack(editor_.track); const auto oldCheckpoint=editor_.SelectedGate();
+    edit(GateY,"-3.75e0"); edit(GateHeading,"0"); edit(GateWidth,"7.5"); click(ApplyGate); Draw(!options_.hidden);
+    const auto checkpoint=SerializeTrack(editor_.track); restored=editor_.track; restored.track.checkpoints[0]=oldCheckpoint;
+    Require(modifiedTrack_ && SerializeTrack(restored)==beforeCheckpoint && editor_.generated->surfaces[0].data()==surfaces && editor_.CanDrive(),"Selected checkpoint Apply changed order/another gate or lost valid Drive."); SaveTrackProject(path);
+    const auto checkpointRevision=geometry_.revision;
+    edit(GateX,"29"); edit(GateWidth,"1e",false); click(ApplyGate); Draw(!options_.hidden);
+    Require(ui_.invalid && ui_.Editing() && gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==checkpoint && geometry_.revision==checkpointRevision,"Apply bypassed invalid active field and committed an older gate draft.");
+    click(CancelGate); Require(!gateDraft_ && !ui_.Editing() && !modifiedTrack_ && SerializeTrack(editor_.track)==checkpoint,"Cancel could not discard invalid active gate field.");
+    for(const auto& invalid:std::vector<std::pair<int,std::string>>{{GateWidth,"0.099"},{GateWidth,"1001"},{GateX,"1e999"},{GateHeading,"1e"}})
+    {
+        edit(invalid.first,invalid.second); Draw(!options_.hidden); Require(ui_.invalid && !modifiedTrack_ && SerializeTrack(editor_.track)==checkpoint && geometry_.revision==checkpointRevision,"Invalid gate numeric field mutated authoring/geometry."); key(VK_ESCAPE);
+    }
+    edit(GateY,"10000"); click(ApplyGate); Draw(!options_.hidden);
+    Require(gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==checkpoint && geometry_.revision==checkpointRevision && status_.find(L"Gate rejected")!=std::wstring::npos,"Rejected full gate candidate lost draft or changed prior state."); click(CancelGate);
+    edit(GateX,"29"); click(GateFirst); Require(!gateDraft_ && SerializeTrack(editor_.track)==checkpoint,"Gate selection change applied a draft to another target.");
+    edit(GateX,"500"); click(ApplyGate); Require(modifiedTrack_ && editor_.generated->surfaces[0].data()==surfaces && !editor_.CanDrive(),"Off-road gate did not preserve surfaces and disable Drive.");
+    const auto offRoad=SerializeTrack(editor_.track); Command(ModeMenu); Interface(); Require(!ui_.Find(DriveMode)->enabled,"Drive menu accepted an off-road gate."); Command(ModeMenu);
+    blocked=false; try { Mode(EditorMode::Drive); } catch(const std::invalid_argument&) { blocked=true; } Require(blocked && editor_.mode==EditorMode::TrackBuilder && SerializeTrack(editor_.track)==offRoad,"Off-road Drive rejection changed authored state or entered Drive.");
+    click(UndoAction); Require(SerializeTrack(editor_.track)==checkpoint && editor_.CanDrive() && modifiedTrack_,"Off-road undo did not restore valid Drive/dirty state.");
+    edit(GateX,"500"); click(CancelGate); Require(modifiedTrack_ && SerializeTrack(editor_.track)==checkpoint,"Gate cancel cleared prior dirty changes."); SaveTrackProject(path); Command(OutlineColorFirst,.2); OpenTrackProject(path);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==checkpoint && editor_.CanDrive(),"Gate production save/reload failed.");
+    click(GateFirst+1); Mode(EditorMode::Drive); Tick(.02,true); Mode(EditorMode::TrackBuilder); Require(editor_.gate==1 && !modifiedTrack_ && SerializeTrack(editor_.track)==checkpoint && SerializeScene(editor_.model.scene)==model && SerializeScene(editor_.track.vehicle)==vehicle,"Gate Drive return lost selection/authored state/assets.");
+    reveal(GateX); ui_.scroll=std::max(0.f,ui_.scroll-120); Draw(!options_.hidden); renderer_.Capture(options_.session/"GatePlacements2560x1440.bmp");
+    std::ofstream(options_.session/"GatePlacementVerification.txt")<<"Own-window routed selection/character/key and Apply controls passed\nFour-field draft atomically applied; no-op/wrapped heading kept original endpoints and rendering revision\nCancel/Escape/focus/mode/selection cancellation and previously dirty state passed\nInvalid numeric/full candidate retained authored state; rejected full candidate retained draft\nPending draft blocked save/Drive; off-road applied gate kept surfaces but disabled/rejected Drive\nOriginal road surfaces retained through checkered/checkpoint Apply and routed undo/redo draws\nSelected gate isolation/order/paints/assets and production save/reload/Drive return passed\nPhysical input/global clipboard/actual notification delivery/real display association: pending\n";
     trackPath_.clear();
 }
 void App::TestUiTransactions()

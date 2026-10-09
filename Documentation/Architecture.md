@@ -18,6 +18,8 @@ The user explicitly omitted Tab navigation and accessibility work. Do not add Ta
 
 Periodic knots use one purpose-specific KnotVector control in the same input, focus, clipping, scrolling and DirectWrite/DX12 path as numeric fields. Its bounded 2048-character draft emits an application action, with periodic parsing/validation kept in the planar domain and transactional application logic. Invalid drafts remain editable and block selection click-through; cancellation never touches authored state. Only a short caret-following text window is rasterized. This does not add a general text editor or table framework. Essential clipboard operations remain Win32 facilities; automatic tests exercise the accepted text/editing paths without modifying the user's global clipboard.
 
+Placed checkered lines/checkpoints use the existing Number and Button controls. Four bounded numeric values form one optional GatePlacement draft; the planar domain validates endpoints before the application changes authored data/history. Gate edits preserve sampled road boundaries; checkered geometry and selected-gate overlays refresh separately. Checkpoints keep their authored ordering. CanDrive uses the existing race/vehicle-footprint validation when the Mode menu opens, rather than repeating asset evaluation while driving or hovering. No extra idle deadline, file-format field or widget kind is introduced.
+
 ## Stages
 
 1. Port tested domain/input/rendering modules and establish their regression tests.

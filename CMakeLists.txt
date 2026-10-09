@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.28)
 project(Veehiicuul3 LANGUAGES CXX RC)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -6,6 +6,7 @@ if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
 endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/W4;/WX;/permissive-;/EHsc;/utf-8;/fp:precise>")
 include(CTest)
@@ -90,6 +91,8 @@ add_custom_command(TARGET Veehiicuul3 POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PRESENTMON_DIRECTORY}/LICENSE.txt" "$<TARGET_FILE_DIR:Veehiicuul3>/PresentMonLicense.txt"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PRESENTMON_DIRECTORY}/Provenance.md" "$<TARGET_FILE_DIR:Veehiicuul3>/PresentMonProvenance.md")
 if(BUILD_TESTING)
+    add_executable(HeadlessRuntimeTests Tests/HeadlessRuntimeTests.cpp)
+    add_test(NAME HeadlessRuntimePolicy COMMAND HeadlessRuntimeTests)
     add_executable(UiStateTests Tests/UiStateTests.cpp)
     target_link_libraries(UiStateTests PRIVATE EditorCore)
     add_test(NAME CustomUiStateAndPresentation COMMAND UiStateTests)
@@ -185,5 +188,69 @@ if(BUILD_TESTING)
     add_test(NAME ExportHeaderCompilation COMMAND "${CMAKE_COMMAND}" "-DCOMPILER=${CMAKE_CXX_COMPILER}" "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/TestOutput" "-DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/Tests/ExportConsumer.cpp" -P "${CMAKE_CURRENT_SOURCE_DIR}/Tests/VerifyExport.cmake")
     set_tests_properties(ExportHeaderCompilation PROPERTIES FIXTURES_REQUIRED ExportFixture)
 endif()
+
+# Apply the same process-local policy to every owned console entry point,
+# including imported unchanged SimplePaint tests. The normal GUI app is opt-in.
+function(guard_console_tests directory)
+    get_property(targets DIRECTORY "${directory}" PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(target IN LISTS targets)
+        get_target_property(type ${target} TYPE)
+        if(type STREQUAL "EXECUTABLE" AND NOT target STREQUAL "Veehiicuul3")
+            target_compile_options(${target} PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/Tests/HeadlessTestStartup.h")
+            if(BUILD_TESTING)
+                add_test(NAME "HeadlessEntry_${target}" COMMAND "${CMAKE_COMMAND}"
+                    "-DPROGRAM=$<TARGET_FILE:${target}>" -DKIND=invalid-parameter -DEXPECTED=31
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/Tests/VerifyHeadlessFailure.cmake")
+                set_tests_properties("HeadlessEntry_${target}" PROPERTIES TIMEOUT 5)
+            endif()
+            set_property(GLOBAL APPEND PROPERTY HeadlessTargets "${target}")
+        endif()
+    endforeach()
+    get_property(children DIRECTORY "${directory}" PROPERTY SUBDIRECTORIES)
+    foreach(child IN LISTS children)
+        guard_console_tests("${child}")
+    endforeach()
+endfunction()
+guard_console_tests("${CMAKE_CURRENT_SOURCE_DIR}")
+if(BUILD_TESTING)
+    # The unchanged module's nested build inherits test-only forced inclusion;
+    # it neither changes module/shader sources nor installs a system policy.
+    set_tests_properties(SimplePaintStandalone DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Source/SimplePaint/Tests"
+        PROPERTIES ENVIRONMENT_MODIFICATION "CL=string_append: /std:c++20 /FI\"${CMAKE_CURRENT_SOURCE_DIR}/Tests/HeadlessTestStartup.h\"" FIXTURES_SETUP HeadlessStandaloneCopies)
+    add_test(NAME HeadlessNestedStandalone COMMAND "${CMAKE_COMMAND}"
+        "-DCOPY_ROOT=${CMAKE_CURRENT_BINARY_DIR}/Source/SimplePaint/Tests/SimplePaintCopyCheck"
+        "-DVERIFY_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/Tests/VerifyHeadlessFailure.cmake"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/Tests/VerifyNestedHeadless.cmake")
+    set_tests_properties(HeadlessNestedStandalone PROPERTIES FIXTURES_REQUIRED HeadlessStandaloneCopies TIMEOUT 20)
+    foreach(kind IN ITEMS worker-invalid-parameter terminate abort)
+        if(kind STREQUAL "abort")
+            set(expected 3)
+        else()
+            set(expected 31)
+        endif()
+        add_test(NAME "HeadlessFailure_${kind}" COMMAND "${CMAKE_COMMAND}"
+            "-DPROGRAM=$<TARGET_FILE:HeadlessRuntimeTests>" "-DKIND=${kind}" "-DEXPECTED=${expected}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/Tests/VerifyHeadlessFailure.cmake")
+        set_tests_properties("HeadlessFailure_${kind}" PROPERTIES TIMEOUT 5)
+    endforeach()
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        foreach(kind IN ITEMS assert wide-assert error checked-iterator)
+            add_test(NAME "HeadlessFailure_${kind}" COMMAND "${CMAKE_COMMAND}"
+                "-DPROGRAM=$<TARGET_FILE:HeadlessRuntimeTests>" "-DKIND=${kind}" -DEXPECTED=31
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/Tests/VerifyHeadlessFailure.cmake")
+            set_tests_properties("HeadlessFailure_${kind}" PROPERTIES TIMEOUT 5)
+        endforeach()
+    endif()
+    foreach(mode IN ITEMS hidden-test smoke-test)
+        add_test(NAME "HeadlessApplication_${mode}" COMMAND "${CMAKE_COMMAND}"
+            "-DPROGRAM=$<TARGET_FILE:Veehiicuul3>" "-DPREFIX=--${mode};--test-monitor;NE18NZ2"
+            -DKIND=invalid-parameter -DEXPECTED=31
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/Tests/VerifyHeadlessFailure.cmake")
+        set_tests_properties("HeadlessApplication_${mode}" PROPERTIES TIMEOUT 5)
+    endforeach()
+endif()
+get_property(guarded GLOBAL PROPERTY HeadlessTargets)
+string(REPLACE ";" "\n" guarded "${guarded}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/HeadlessTargets.txt" "${guarded}\nVeehiicuul3: --hidden-test and --smoke-test only\nSimplePaintStandalone: nested CL forced inclusion\n")
 
 

@@ -23,6 +23,8 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Run.cmd'),(Join-Path $PSScriptR
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Source\Assets\SlopeCar.modeler') -Destination (Join-Path $candidate 'Examples')
 Copy-Item -LiteralPath (Join-Path $release 'Testing\Temporary\LastTest.log') -Destination (Join-Path $candidate 'Verification\ReleaseCTest.log')
 Copy-Item -LiteralPath (Join-Path $debug 'Testing\Temporary\LastTest.log') -Destination (Join-Path $candidate 'Verification\DebugCTest.log')
+Copy-Item -LiteralPath (Join-Path $release 'HeadlessTargets.txt') -Destination (Join-Path $candidate 'Verification\HeadlessTargets.txt')
+Copy-Item -LiteralPath (Join-Path $release 'Source\SimplePaint\Tests\SimplePaintCopyCheck\HeadlessNestedVerification.txt') -Destination (Join-Path $candidate 'Verification\HeadlessNestedVerification.txt')
 $info = [ordered]@{Project='Veehiicuul3';Commit=$commit;Ready=$false;Status='Candidate';ExecutableSha256=(Get-FileHash -LiteralPath (Join-Path $candidate 'Veehiicuul3.exe') -Algorithm SHA256).Hash;CreatedUtc=[DateTime]::UtcNow.ToString('o');Verification=[ordered]@{ReleaseNoninteractive=$true;DebugNoninteractive=$true;CopiedHardware=$false;CopiedWarp=$false;CopiedVisibleHardware=$false;CopiedVisibleWarp=$false;PhysicalMouse=$false;PhysicalGamepad=$false;ActualEtwDisplayLatency=$false}}
 $manifest = Join-Path $candidate 'BuildInfo.json'
 $info | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifest -Encoding utf8

@@ -5,20 +5,12 @@
 #include <cstdlib>
 #ifdef _DEBUG
 #include <crtdbg.h>
-#include <cstdio>
 #endif
 
 void Require(bool value,const char* text) { if(!value) throw std::runtime_error(text); }
 template<class F> void Reject(F operation,const char* text) { try { operation(); } catch(const std::invalid_argument&) { return; } throw std::runtime_error(text); }
 int main(int argc,char** argv)
 {
-#ifdef _DEBUG
-    _set_error_mode(_OUT_TO_STDERR);
-    _CrtSetReportMode(_CRT_ASSERT,_CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ASSERT,_CRTDBG_FILE_STDERR);
-    _set_abort_behavior(0,_WRITE_ABORT_MSG | _CALL_REPORTFAULT);
-    _set_invalid_parameter_handler([](const wchar_t*,const wchar_t*,const wchar_t*,unsigned,uintptr_t) { std::fputs("Headless invalid parameter failure.\n",stderr); std::_Exit(1); });
-#endif
     if(argc==2 && std::strcmp(argv[1],"--probe-headless-assert")==0)
     {
 #ifdef _DEBUG

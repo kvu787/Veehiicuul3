@@ -1,5 +1,6 @@
 #include "App.h"
 #include "DisplayCaptureOptions.h"
+#include "HeadlessRuntime.h"
 #include <shellapi.h>
 #include <fstream>
 #include <iomanip>
@@ -9,6 +10,15 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int)
 {
     RunOptions options; std::wstring monitor; std::string optionError; int count=0;
     auto arguments=CommandLineToArgvW(GetCommandLineW(),&count);
+    // Establish test reporting before parsing, allocating sessions or opening UI.
+    bool headlessPolicy=false;
+    for(int i=1;i<count;++i) if(std::wstring_view(arguments[i])==L"--hidden-test" || std::wstring_view(arguments[i])==L"--smoke-test") headlessPolicy=true;
+    if(headlessPolicy)
+    {
+        HeadlessRuntime::Configure();
+        if(!HeadlessRuntime::Configured()) HeadlessRuntime::Fail("application test policy configuration failed");
+        HeadlessRuntime::Probe(HeadlessRuntime::ProbeArgument(GetCommandLineW()));
+    }
     for(int i=1;i<count;++i)
     {
         const std::wstring a=arguments[i];

@@ -166,3 +166,13 @@ User explicitly reiterates17:44:56UTC: notify whenever a new Veehiicuul3 build i
 The rereview found one remaining unlock issue: cached input-desktop availability can stay false after reconnecting. I'm stopping packaging before the ready pointer advances, fixing that refresh, and adding a suspension/resumption test that runs inside one continuous production Pump call.
 
 The unlock fix passed all 29 noninteractive checks. The continuous-loop tests cover both a 200 ms pause and back-to-back lock/unlock messages handled in one batch, with no simulation catch-up on resume. The ready pointer stayed unchanged when packaging was stopped; the incomplete package is preserved as an explicit candidate. I'm restarting packaging from the final committed source.
+
+## Subsequent checkpoint steering retained through context compaction
+
+The following are recovery notes, not reconstructed verbatim quotes. The parent reported at 18:02 UTC that the corrected 45f24fbc77e9 snapshot had been announced to the user. It requested continuing the next small core parity slice, with physical/visual limits kept honest and UI scope minimal. A bounded reviewer confirmed desktop resumption and continuous timing fixes with no remaining concrete defect in its scope, while noting that back-to-back posted notifications do not guarantee one message-drain batch. After the extra CMD smoke failure, the parent required exact HRESULT evidence and a platform explanation before relaxing any test assertion. Failed Present/device-removal failures, the unaccepted-submission regression and original failure/launcher-exit evidence must remain preserved. The strict assertion was restored before the latest test gates; no expected-status exception was delivered.
+
+## Assistant progress after recovery (verbatim)
+
+The corrected 45f24f build remains the ready snapshot. I'm finishing selected-part framing and checking the exact Present-result diagnostics with the strict assertion intact, then I'll package and report the next verified build.
+
+The displayed rerun passed: all 122 instrumented submissions returned S_OK, with zero idle presents and zero DX12 warnings. The earlier failure's HRESULT was never recorded, so its cause is still unknown. The strict acceptance check remains; new diagnostics will retain the exact result if it recurs. The launchers now also preserve a failing exit code across their pause.

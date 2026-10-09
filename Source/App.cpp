@@ -431,13 +431,14 @@ POINT App::SliderPoint() const
 }
 void App::Abort(bool restore)
 {
+    const bool changedGeometry=modelDrag_ || trackDrag_;
     restore=restore && GetForegroundWindow()==window_ && GetCapture()==window_;
     POINT point{}; if(restore && slider_) { try { point=SliderPoint(); } catch(...) { restore=false; } }
     relative_.End(point,restore); editor_.EndPaint(true); slider_=0; ui_.Cancel();
     if(modelDrag_) editor_.model=dragStart_; if(trackDrag_) editor_.track=trackStart_;
     modelDrag_=trackDrag_=orbit_=pan_=false; held_.fill(false);
     if(!options_.hidden && !options_.smoke && GetCapture()==window_) ReleaseCapture();
-    Change();
+    Change(changedGeometry);
 }
 void App::RawMouse(HRAWINPUT input)
 {

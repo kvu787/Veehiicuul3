@@ -5,6 +5,8 @@
 #include <wbemidl.h>
 #include <wrl/client.h>
 #include <cwctype>
+#include <shellscalingapi.h>
+#include <sstream>
 
 namespace
 {
@@ -114,7 +116,8 @@ size_t ResolveDisplay(const std::vector<Display>& displays,const std::wstring& n
 {
     size_t found=displays.size();
     for(size_t i=0;i<displays.size();++i)
-        if(_wcsicmp(name.c_str(),displays[i].name.c_str())==0 || _wcsicmp(name.c_str(),displays[i].device.c_str())==0 || _wcsicmp(name.c_str(),displays[i].identity.c_str())==0)
+        if(_wcsicmp(name.c_str(),displays[i].name.c_str())==0 || _wcsicmp(name.c_str(),displays[i].device.c_str())==0 || _wcsicmp(name.c_str(),displays[i].identity.c_str())==0 ||
+           (_wcsicmp(name.c_str(),L"NE18NZ2")==0 && displays[i].name==L"NE180QAM-NZ2" && displays[i].identity.find(L"BOE0D5B")!=std::wstring::npos))
         {
             if(found!=displays.size()) throw std::runtime_error("More than one display has that name. Use its exact DISPLAY device name.");
             found=i;
@@ -129,4 +132,29 @@ size_t PrimaryDisplay(const std::vector<Display>& displays)
     { if(found!=displays.size()) throw std::runtime_error("Windows reported more than one main display."); found=i; }
     if(found==displays.size()) throw std::runtime_error("Windows did not identify its main display.");
     return found;
+}
+Presentation DisplayPresentation(const Display& d)
+{
+    Presentation p; p.width=d.bounds.right-d.bounds.left; p.height=d.bounds.bottom-d.bounds.top; p.originX=d.bounds.left; p.originY=d.bounds.top;
+    const auto old=SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    RECT rect=d.bounds; const auto monitor=MonitorFromRect(&rect,MONITOR_DEFAULTTONULL);
+    const auto result=GetDpiForMonitor(monitor,MDT_EFFECTIVE_DPI,&p.dpiX,&p.dpiY);
+    if(old) SetThreadDpiAwarenessContext(old);
+    if(FAILED(result)) throw std::runtime_error("Cannot query selected monitor effective DPI; startup refused.");
+    return p;
+}
+void ValidateDisplay(const Display& d,const Presentation& p)
+{
+    if(p.Supported()) return;
+    char label[512]{}; WideCharToMultiByte(CP_UTF8,0,d.Label().c_str(),-1,label,sizeof(label),nullptr,nullptr);
+    std::ostringstream s; s<<"Display "<<label<<" is "<<p.width<<"x"<<p.height<<" at "<<p.dpiX<<"x"<<p.dpiY<<" effective DPI ("<<p.dpiX*100.0/96<<"% scaling). Veehiicuul3 requires at least 2560x1440 and exactly 100% scaling (96x96 DPI). No window was opened.";
+    throw std::runtime_error(s.str());
+}
+bool InputDesktopAvailable()
+{
+    const auto desktop=OpenInputDesktop(0,FALSE,DESKTOP_SWITCHDESKTOP);
+    if(!desktop) return false;
+    wchar_t name[128]{}; DWORD needed=0;
+    const bool available=GetUserObjectInformationW(desktop,UOI_NAME,name,sizeof(name),&needed) && _wcsicmp(name,L"Default")==0;
+    CloseDesktop(desktop); return available;
 }

@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <string>
 #include <vector>
+#include "Presentation.h"
 
 struct Display
 {
@@ -13,3 +14,6 @@ struct Display
 std::vector<Display> EnumerateDisplays();
 size_t ResolveDisplay(const std::vector<Display>& displays,const std::wstring& name);
 size_t PrimaryDisplay(const std::vector<Display>& displays);
+Presentation DisplayPresentation(const Display& display);
+void ValidateDisplay(const Display& display,const Presentation& presentation);
+bool InputDesktopAvailable();

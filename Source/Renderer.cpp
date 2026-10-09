@@ -234,6 +234,7 @@ void Renderer::CreateTargets()
     description.Format=DXGI_FORMAT_R8G8B8A8_TYPELESS;
     description.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     D3D12_CLEAR_VALUE colorClear{}; colorClear.Format=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    colorClear.Color[0]=.025f; colorClear.Color[1]=.03f; colorClear.Color[2]=.04f; colorClear.Color[3]=1;
     const auto surfaceHeap=Heap(D3D12_HEAP_TYPE_DEFAULT);
     Check(device_->CreateCommittedResource(&surfaceHeap,D3D12_HEAP_FLAG_NONE,&description,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,&colorClear,IID_PPV_ARGS(&surface_)),"Create fixed 2560x1440 application surface");
     device_->CreateRenderTargetView(surface_.Get(),&view,handle);
@@ -292,6 +293,7 @@ void Renderer::CreateUi()
     parameter.DescriptorTable={1,&range}; parameter.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
     D3D12_STATIC_SAMPLER_DESC sampler{};
     sampler.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR; sampler.AddressU=sampler.AddressV=sampler.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.ComparisonFunc=D3D12_COMPARISON_FUNC_NEVER;
     sampler.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL; sampler.MaxLOD=D3D12_FLOAT32_MAX;
     D3D12_ROOT_SIGNATURE_DESC root{}; root.NumParameters=1; root.pParameters=&parameter; root.NumStaticSamplers=1; root.pStaticSamplers=&sampler;
     root.Flags=D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
@@ -305,6 +307,7 @@ void Renderer::CreateUi()
     D3D12_GRAPHICS_PIPELINE_STATE_DESC p{}; p.pRootSignature=uiRoot_.Get(); p.VS={UiVertexShader,sizeof(UiVertexShader)}; p.PS={UiPixelShader,sizeof(UiPixelShader)};
     p.InputLayout={layout,3}; p.SampleMask=UINT_MAX; p.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID; p.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
     p.RasterizerState.DepthClipEnable=TRUE; p.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    p.DepthStencilState.DepthFunc=D3D12_COMPARISON_FUNC_ALWAYS; p.DepthStencilState.StencilReadMask=p.DepthStencilState.StencilWriteMask=D3D12_DEFAULT_STENCIL_READ_MASK;
     p.NumRenderTargets=1; p.RTVFormats[0]=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; p.SampleDesc.Count=1;
     auto& blend=p.BlendState.RenderTarget[0]; blend.BlendEnable=TRUE; blend.SrcBlend=D3D12_BLEND_SRC_ALPHA; blend.DestBlend=D3D12_BLEND_INV_SRC_ALPHA;
     blend.BlendOp=D3D12_BLEND_OP_ADD; blend.SrcBlendAlpha=D3D12_BLEND_ONE; blend.DestBlendAlpha=D3D12_BLEND_INV_SRC_ALPHA; blend.BlendOpAlpha=D3D12_BLEND_OP_ADD;
@@ -347,12 +350,14 @@ void Renderer::DrawUi(Frame& frame,const UiGpuData& ui)
     if(bytes>frame.uiCapacity)
     {
         frame.uiBuffer.Reset(); frame.uiCapacity=std::max(bytes,frame.uiCapacity*2);
-        const auto heap=Heap(D3D12_HEAP_TYPE_UPLOAD),buffer=Buffer(frame.uiCapacity);
+        const auto heap=Heap(D3D12_HEAP_TYPE_UPLOAD);
+        const auto buffer=Buffer(frame.uiCapacity);
         Check(device_->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&frame.uiBuffer)),"Create UI vertex upload");
         D3D12_RANGE noRead{0,0}; Check(frame.uiBuffer->Map(0,&noRead,reinterpret_cast<void**>(&frame.uiMapped)),"Map UI vertices");
     }
     std::memcpy(frame.uiMapped,ui.vertices.data(),bytes);
     D3D12_VIEWPORT viewport{0,0,2560,1440,0,1}; D3D12_RECT clip{0,0,2560,1440}; commands_->RSSetViewports(1,&viewport); commands_->RSSetScissorRects(1,&clip);
+    auto target=renderHeap_->GetCPUDescriptorHandleForHeapStart(); target.ptr+=2*descriptorSize_; commands_->OMSetRenderTargets(1,&target,FALSE,nullptr);
     commands_->SetGraphicsRootSignature(uiRoot_.Get()); commands_->SetPipelineState(uiPipeline_.Get());
     ID3D12DescriptorHeap* heaps[]={textureHeap_.Get()}; commands_->SetDescriptorHeaps(1,heaps);
     commands_->SetGraphicsRootDescriptorTable(0,textureHeap_->GetGPUDescriptorHandleForHeapStart());
@@ -366,7 +371,8 @@ void Renderer::PresentSurface()
     auto barrier=Transition(targets_[index].Get(),D3D12_RESOURCE_STATE_PRESENT,D3D12_RESOURCE_STATE_RENDER_TARGET); commands_->ResourceBarrier(1,&barrier);
     auto target=renderHeap_->GetCPUDescriptorHandleForHeapStart(); target.ptr+=index*descriptorSize_;
     commands_->OMSetRenderTargets(1,&target,FALSE,nullptr);
-    D3D12_VIEWPORT viewport{0,0,static_cast<float>(displayWidth_),static_cast<float>(displayHeight_),0,1};
+    constexpr float black[4]={0,0,0,1}; commands_->ClearRenderTargetView(target,black,0,nullptr);
+    D3D12_VIEWPORT viewport{static_cast<float>((displayWidth_-2560)/2),static_cast<float>((displayHeight_-1440)/2),2560,1440,0,1};
     D3D12_RECT clip{0,0,static_cast<LONG>(displayWidth_),static_cast<LONG>(displayHeight_)}; commands_->RSSetViewports(1,&viewport); commands_->RSSetScissorRects(1,&clip);
     commands_->SetGraphicsRootSignature(uiRoot_.Get()); commands_->SetPipelineState(presentPipeline_.Get());
     ID3D12DescriptorHeap* heaps[]={textureHeap_.Get()}; commands_->SetDescriptorHeaps(1,heaps);
@@ -508,11 +514,25 @@ unsigned Renderer::DebugErrors() const
     return errors;
 }
 
-void Renderer::Capture(const std::filesystem::path& path)
+std::string Renderer::DebugMessages() const
+{
+    std::string output; if(!infoQueue_) return "Debug layer unavailable.";
+    for(UINT64 i=0;i<infoQueue_->GetNumStoredMessagesAllowedByRetrievalFilter();++i)
+    {
+        SIZE_T size=0; infoQueue_->GetMessage(i,nullptr,&size); std::vector<std::byte> storage(size); auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+        if(SUCCEEDED(infoQueue_->GetMessage(i,message,&size)) && message->Severity<=D3D12_MESSAGE_SEVERITY_WARNING) { output.append(message->pDescription,message->DescriptionByteLength); output.push_back('\n'); }
+    }
+    return output;
+}
+
+void Renderer::Capture(const std::filesystem::path& path,bool presented)
 {
     WaitIdle();
     auto& frame = frames_[lastFrame_];
-    const auto description = surface_->GetDesc();
+    auto* resource=presented ? targets_[lastFrame_].Get() : surface_.Get();
+    const auto initial=presented ? D3D12_RESOURCE_STATE_PRESENT : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    const auto description = resource->GetDesc();
+    const auto captureWidth=static_cast<unsigned>(description.Width),captureHeight=description.Height;
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
     UINT64 bytes = 0;
     device_->GetCopyableFootprints(&description, 0, 1, 0, &footprint, nullptr, nullptr, &bytes);
@@ -522,16 +542,16 @@ void Renderer::Capture(const std::filesystem::path& path)
     Check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&readback)), "Create screenshot readback");
     Check(frame.allocator->Reset(), "Reset capture allocator");
     Check(commands_->Reset(frame.allocator.Get(), nullptr), "Reset capture commands");
-    auto barrier = Transition(surface_.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    auto barrier = Transition(resource, initial, D3D12_RESOURCE_STATE_COPY_SOURCE);
     commands_->ResourceBarrier(1, &barrier);
     D3D12_TEXTURE_COPY_LOCATION source{}, destination{};
-    source.pResource = surface_.Get();
+    source.pResource = resource;
     source.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     destination.pResource = readback.Get();
     destination.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     destination.PlacedFootprint = footprint;
     commands_->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
-    barrier = Transition(surface_.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    barrier = Transition(resource, D3D12_RESOURCE_STATE_COPY_SOURCE, initial);
     commands_->ResourceBarrier(1, &barrier);
     Check(commands_->Close(), "Close capture commands");
     ID3D12CommandList* lists[] = {commands_.Get()};
@@ -540,12 +560,12 @@ void Renderer::Capture(const std::filesystem::path& path)
     std::byte* pixels = nullptr;
     D3D12_RANGE range{0, static_cast<SIZE_T>(bytes)};
     Check(readback->Map(0, &range, reinterpret_cast<void**>(&pixels)), "Map screenshot");
-    std::vector<unsigned char> output(static_cast<size_t>(width_) * height_ * 4);
-    for (unsigned y = 0; y < height_; ++y)
-        for (unsigned x = 0; x < width_; ++x)
+    std::vector<unsigned char> output(static_cast<size_t>(captureWidth) * captureHeight * 4);
+    for (unsigned y = 0; y < captureHeight; ++y)
+        for (unsigned x = 0; x < captureWidth; ++x)
         {
             const auto input = reinterpret_cast<const unsigned char*>(pixels) + footprint.Offset + y * footprint.Footprint.RowPitch + x * 4;
-            const auto pixel = output.data() + (static_cast<size_t>(height_ - 1 - y) * width_ + x) * 4;
+            const auto pixel = output.data() + (static_cast<size_t>(captureHeight - 1 - y) * captureWidth + x) * 4;
             pixel[0] = input[2]; pixel[1] = input[1]; pixel[2] = input[0]; pixel[3] = 255;
         }
     D3D12_RANGE noWrite{0, 0};
@@ -556,8 +576,8 @@ void Renderer::Capture(const std::filesystem::path& path)
     file.bfSize = file.bfOffBits + static_cast<DWORD>(output.size());
     BITMAPINFOHEADER image{};
     image.biSize = sizeof(image);
-    image.biWidth = static_cast<LONG>(width_);
-    image.biHeight = static_cast<LONG>(height_);
+    image.biWidth = static_cast<LONG>(captureWidth);
+    image.biHeight = static_cast<LONG>(captureHeight);
     image.biPlanes = 1;
     image.biBitCount = 32;
     image.biCompression = BI_RGB;
@@ -567,4 +587,5 @@ void Renderer::Capture(const std::filesystem::path& path)
     stream.write(reinterpret_cast<const char*>(output.data()), static_cast<std::streamsize>(output.size()));
     if (!stream) throw std::runtime_error("Could not write viewport capture.");
 }
+
 

@@ -25,12 +25,13 @@ public:
     void Render(const ViewGeometry& geometry, const Orthographic::ObjectTransforms& transforms,
                 std::span<const SimplePaint::GpuMaterial> materials,std::span<const std::array<float,4>> surfaces={},const Orthographic::ObjectTransforms* vehicle=nullptr,const DisplayPresentProbe* probe=nullptr,
                 const UiGpuData* ui=nullptr,Ui::Rect view={438,62,2122,1316},bool present=true);
-    void Capture(const std::filesystem::path& path);
+    void Capture(const std::filesystem::path& path,bool presented=false);
     HANDLE FrameReady() const { return frameReady_; }
     const std::string& AdapterName() const { return adapterName_; }
     unsigned Width() const { return width_; }
     unsigned Height() const { return height_; }
     unsigned DebugErrors() const;
+    std::string DebugMessages() const;
     bool HasDebugLayer() const { return infoQueue_ != nullptr; }
     void WaitIdle();
     bool Occluded() const { return occluded_; }

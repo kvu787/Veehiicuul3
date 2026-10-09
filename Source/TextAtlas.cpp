@@ -57,7 +57,7 @@ TextAtlas::Entry TextAtlas::Text(const std::wstring& text)
     {
         // Whole-atlas invalidation is safe: Paint prewarms labels before it
         // emits quads, so no draw list references displaced cache entries.
-        entries_.clear(); std::fill(pixels_.begin(),pixels_.end(),0); pixels_[0]=255;
+        entries_.clear(); std::fill(pixels_.begin(),pixels_.end(),uint8_t{0}); pixels_[0]=255;
         x_=y_=2; rowHeight_=0; ++data_.revision;
     }
     const HDC dc=target_->GetMemoryDC(); PatBlt(dc,0,0,UiGpuData::AtlasSize,64,BLACKNESS);
@@ -69,8 +69,9 @@ TextAtlas::Entry TextAtlas::Text(const std::wstring& text)
     const auto* bits=static_cast<const uint8_t*>(dib.dsBm.bmBits);
     for(unsigned y=0;y<height;++y) for(unsigned x=0;x<width;++x)
     {
-        const auto sourceY=dib.dsBmih.biHeight>0 ? 63-y : y;
-        const auto* pixel=bits+static_cast<size_t>(sourceY)*dib.dsBm.bmWidthBytes+x*4;
+        // IDWriteBitmapRenderTarget exposes its DIB in top-to-bottom memory
+        // order. Its DIBSECTION height sign is not the pixel-row orientation.
+        const auto* pixel=bits+static_cast<size_t>(y)*dib.dsBm.bmWidthBytes+x*4;
         pixels_[(y_+y)*UiGpuData::AtlasSize+x_+x]=std::max({pixel[0],pixel[1],pixel[2]});
     }
     const Entry entry{static_cast<float>(x_),static_cast<float>(y_),static_cast<float>(width),static_cast<float>(height)};
@@ -98,9 +99,10 @@ void TextAtlas::Paint(const Ui::State& ui,const std::wstring& status)
     const Ui::Rect all{0,0,Ui::Width,Ui::Height};
     auto value=[&](const Ui::Control& c) { if(c.id==ui.focus && c.kind==Ui::Kind::Number) return ui.edit; std::wostringstream s; s<<std::setprecision(12)<<c.value; return s.str(); };
     // Bound numeric-string growth and prewarm before any UVs are emitted.
-    if(entries_.size()>1800) { entries_.clear(); std::fill(pixels_.begin(),pixels_.end(),0); pixels_[0]=255; x_=y_=2; rowHeight_=0; ++data_.revision; }
+    if(entries_.size()>300 || y_>1400) { entries_.clear(); std::fill(pixels_.begin(),pixels_.end(),uint8_t{0}); pixels_[0]=255; x_=y_=2; rowHeight_=0; ++data_.revision; }
     Text(status);
     for(const auto& c:ui.controls) { Text(c.text); if(c.kind==Ui::Kind::Number) Text(value(c)); }
+    if(ui.Editing()) Text(ui.edit.substr(0,ui.caret));
     data_.vertices.clear();
     Rectangle({0,0,2560,62},{.055f,.06f,.07f,1},all);
     Rectangle(ui.panel,{.085f,.09f,.105f,1},all);
@@ -125,15 +127,19 @@ void TextAtlas::Paint(const Ui::State& ui,const std::wstring& status)
         {
             const auto text=c.kind==Ui::Kind::Number ? value(c) : c.text;
             if(c.kind==Ui::Kind::Number && c.id==ui.focus && ui.caret!=ui.anchor) Rectangle({c.rect.x+6,c.rect.y+5,c.rect.w-12,c.rect.h-10},{.12f,.26f,.47f,1},clip);
-            Label(text,c.rect.x+6,c.rect.y+7,textColor,clip);
+            const auto textClip=Ui::Intersect(c.rect,clip);
+            float textX=c.rect.x+6;
+            if(c.kind==Ui::Kind::Number && c.id==ui.focus) { const auto prefix=Text(ui.edit.substr(0,ui.caret)); textX-=std::max(0.f,prefix.w-4-(c.rect.w-14)); }
+            Label(text,textX,c.rect.y+7,textColor,textClip);
             // Static caret: numeric editing never arms a periodic blink timer.
             if(c.kind==Ui::Kind::Number && c.id==ui.focus)
             {
                 const auto prefix=Text(ui.edit.substr(0,ui.caret));
-                Rectangle({std::min(c.rect.x+c.rect.w-4,c.rect.x+6+prefix.w-4),c.rect.y+5,1,c.rect.h-10},textColor,clip);
+                Rectangle({textX+prefix.w-4,c.rect.y+5,1,c.rect.h-10},textColor,textClip);
             }
         }
     }
     if(ui.contentHeight>ui.panel.h) { Rectangle({ui.panel.x+ui.panel.w-14,ui.panel.y,14,ui.panel.h},{.05f,.055f,.065f,1},all); Rectangle(ui.Thumb(),{.28f,.30f,.34f,1},all); }
     Label(status,12,1398,{.64f,.68f,.73f,1},all);
 }
+

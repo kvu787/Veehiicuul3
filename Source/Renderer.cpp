@@ -53,6 +53,7 @@ D3D12_RESOURCE_BARRIER Transition(ID3D12Resource* resource, D3D12_RESOURCE_STATE
 
 Renderer::~Renderer()
 {
+    StopVisibilityNotifications();
     try { WaitIdle(); } catch (...) {}
     if (frameReady_) CloseHandle(frameReady_);
     if (fenceEvent_) CloseHandle(fenceEvent_);
@@ -72,6 +73,7 @@ void Renderer::Initialize(HWND window, bool forceSoftware, bool debugLayer)
     }
     ComPtr<IDXGIFactory6> factory;
     Check(CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&factory)), "Create DXGI factory");
+    factory_=factory;
     ComPtr<IDXGIAdapter1> selected;
     auto tryAdapter = [&](IDXGIAdapter1* adapter)
     {
@@ -130,6 +132,8 @@ void Renderer::Initialize(HWND window, bool forceSoftware, bool debugLayer)
     Check(factory->CreateSwapChainForHwnd(queue_.Get(), window, &swapDescription, nullptr, nullptr, &swap), "Create swap chain");
     Check(swap.As(&swapChain_), "Query swap chain");
     Check(factory->MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER), "Disable automatic fullscreen");
+    Check(factory->RegisterOcclusionStatusWindow(window,VisibilityMessage,&occlusionCookie_),"Register DXGI visibility notifications");
+    occlusionRegistered_=true;
     Check(swapChain_->SetMaximumFrameLatency(1), "Set maximum frame latency");
     frameReady_ = swapChain_->GetFrameLatencyWaitableObject();
     if (!frameReady_) throw std::runtime_error("DXGI frame latency wait handle unavailable.");
@@ -280,10 +284,9 @@ void Renderer::Resize(unsigned width, unsigned height)
     CreateTargets();
 }
 
-bool Renderer::TestVisibility()
+void Renderer::StopVisibilityNotifications()
 {
-    const auto result=swapChain_->Present(0,DXGI_PRESENT_TEST);
-    Check(result,"Test presentation visibility"); occluded_=result==DXGI_STATUS_OCCLUDED; return !occluded_;
+    if(occlusionRegistered_ && factory_) { factory_->UnregisterOcclusionStatus(occlusionCookie_); occlusionRegistered_=false; occlusionCookie_=0; }
 }
 
 void Renderer::CreateUi()
@@ -492,7 +495,7 @@ void Renderer::Render(const ViewGeometry& geometry, const Orthographic::ObjectTr
         QueryPerformanceCounter(&counter); measurement.presentEndQpc=static_cast<std::uint64_t>(counter.QuadPart); measurement.accepted=result==S_OK;
         Check(result,"Present frame");
     }
-    else if(present) { const auto result=swapChain_->Present(0, tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0); occluded_=result==DXGI_STATUS_OCCLUDED; Check(result,"Present frame"); }
+    else if(present) Check(swapChain_->Present(0, tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0),"Present frame");
     if(present) ++presents_;
     frame.fence = nextFence_++;
     Check(queue_->Signal(fence_.Get(), frame.fence), "Signal frame completion");

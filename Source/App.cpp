@@ -2,6 +2,8 @@
 #include "SurfaceMaterials.h"
 #include <commdlg.h>
 #include <windowsx.h>
+#include <wtsapi32.h>
+#include <dwmapi.h>
 #include <fstream>
 #include <sstream>
 #include <cstring>
@@ -44,11 +46,22 @@ App::App(HINSTANCE instance,Display display,Presentation p,RunOptions options) :
     if(!window_) throw std::runtime_error("Create borderless application window failed.");
     renderer_.Initialize(window_,options_.software,true); text_.Initialize();
     wchar_t exe[32768]{}; GetModuleFileNameW(nullptr,exe,32768); gamepad_.Initialize(std::filesystem::path(exe).parent_path());
+    sessionRegistered_=WTSRegisterSessionNotification(window_,NOTIFY_FOR_THIS_SESSION)!=FALSE;
+    if(!sessionRegistered_) throw std::runtime_error("Register session visibility notifications failed.");
+    displayPowerNotification_=RegisterPowerSettingNotification(window_,&GUID_CONSOLE_DISPLAY_STATE,DEVICE_NOTIFY_WINDOW_HANDLE);
+    if(!displayPowerNotification_) throw std::runtime_error("Register display power notifications failed.");
+    cloakHook_=SetWinEventHook(EVENT_OBJECT_CLOAKED,EVENT_OBJECT_UNCLOAKED,nullptr,CloakChanged,GetCurrentProcessId(),0,WINEVENT_OUTOFCONTEXT);
+    if(!cloakHook_) throw std::runtime_error("Register window cloaking notifications failed.");
+    RefreshVisibility();
     editor_.Frame(); editor_.trackCamera.height=100; editor_.trackCamera.pitch=1.1f; editor_.trackCamera.yaw=0;
 }
 App::~App()
 {
     Abort(); if(tracker_) tracker_->Stop(); gamepad_.Stop();
+    renderer_.StopVisibilityNotifications();
+    if(cloakHook_) UnhookWinEvent(cloakHook_);
+    if(displayPowerNotification_) UnregisterPowerSettingNotification(displayPowerNotification_);
+    if(sessionRegistered_ && window_) WTSUnRegisterSessionNotification(window_);
     if(window_) DestroyWindow(window_);
 }
 LRESULT CALLBACK App::Procedure(HWND window,UINT message,WPARAM wparam,LPARAM lparam)
@@ -62,6 +75,27 @@ LRESULT CALLBACK App::Procedure(HWND window,UINT message,WPARAM wparam,LPARAM lp
 void App::Change(bool mesh)
 {
     meshDirty_=meshDirty_ || mesh; overlayDirty_=true; schedule_.dirty=true;
+}
+void CALLBACK App::CloakChanged(HWINEVENTHOOK,DWORD,HWND window,LONG object,LONG,DWORD,DWORD)
+{
+    if(window && object==OBJID_WINDOW) PostMessageW(window,Renderer::VisibilityMessage,0,0);
+}
+void App::VisibilityChanged()
+{
+    const bool wasBlocked=schedule_.occluded; schedule_.occluded=visibility_.Blocked();
+    if(schedule_.occluded && !wasBlocked) { Abort(); accumulator_=0; }
+    if(!schedule_.occluded && wasBlocked) schedule_.dirty=true;
+    gamepad_.SetForeground(schedule_.WantsTimer());
+}
+void App::RefreshVisibility()
+{
+    if(!syntheticVisibility_)
+    {
+        visibility_.shown=IsWindowVisible(window_)!=FALSE; schedule_.minimized=IsIconic(window_)!=FALSE;
+        DWORD cloaked=0; visibility_.cloaked=SUCCEEDED(DwmGetWindowAttribute(window_,DWMWA_CLOAKED,&cloaked,sizeof(cloaked))) && cloaked!=0;
+        visibility_.desktopAvailable=InputDesktopAvailable();
+    }
+    VisibilityChanged();
 }
 void App::Interface()
 {
@@ -171,7 +205,7 @@ void App::Mode(EditorMode mode)
 {
     Abort(); editor_.Mode(mode); ui_.scroll=0; ui_.focus=0; held_.fill(false); accumulator_=0;
     schedule_.active=mode==EditorMode::Drive && foreground_;
-    gamepad_.SetForeground(schedule_.active);
+    gamepad_.SetForeground(schedule_.WantsTimer());
     if(mode==EditorMode::Drive && options_.traceSeconds)
     {
         tracker_=std::make_unique<DisplayTracker>(options_.session);
@@ -309,17 +343,19 @@ void App::Draw(bool present)
         vehicle=camera.Transforms(2122,1316,world); vehiclePointer=&vehicle;
     }
     DisplayFrameSubmission frame{}; DisplayPresentProbe probe{}; const DisplayPresentProbe* probePointer=nullptr;
-    if(present && tracker_ && tracker_->Active() && editor_.mode==EditorMode::Drive)
+    if(present && editor_.mode==EditorMode::Drive && ((tracker_ && tracker_->Active()) || testPresentProbe_))
     {
         frame=displayInputs_.Take(++displayFrame_); probe={&frame,[](void* p) { return static_cast<GamepadInput*>(p)->Now(); },&gamepad_}; probePointer=&probe;
     }
     renderer_.Render(geometry_,transforms,std::span(paints_.data(),MaterialCount(shown_)),std::span(surfaces_.data(),MaterialCount(shown_)),vehiclePointer,probePointer,&text_.Data(),view_,present);
-    if(probePointer) tracker_->Submit(frame);
-    schedule_.dirty=false; schedule_.occluded=renderer_.Occluded();
+    if(probePointer && tracker_) tracker_->Submit(frame);
+    if(probePointer && testPresentProbe_) { Require(frame.accepted,"Traced present was rejected."); ++testTracedPresents_; }
+    schedule_.dirty=false;
 }
 void App::Tick(double seconds,bool synthetic)
 {
     if(editor_.mode!=EditorMode::Drive) return;
+    const auto before=ticks_;
     accumulator_+=std::clamp(seconds,0.,.0666666667);
     for(unsigned step=0;accumulator_>=1./120 && step<8;++step)
     {
@@ -339,11 +375,12 @@ void App::Tick(double seconds,bool synthetic)
                 tracker_->ReportInputLoss(gamepad_.InputLossDetected() || sample.droppedEdges || sample.callbackErrors || displayInputs_.HasLoss());
             }
         }
-        editor_.race.Step(command,1./120); accumulator_-=1./120;
+        editor_.race.Step(command,1./120); ++ticks_; accumulator_-=1./120;
     }
     statusClock_+=seconds;
-    if(statusClock_>=.25) { status_=L"Drive | "+Wide(gamepad_.Status()); statusClock_=0; }
-    Change(false);
+    const bool statusChanged=statusClock_>=.25;
+    if(statusChanged) { status_=L"Drive | "+Wide(gamepad_.Status()); statusClock_=0; }
+    if(ticks_!=before || statusChanged) Change(false);
 }
 Racing2D::Point App::Ground(float x,float y) const
 {
@@ -381,7 +418,7 @@ void App::Pick(float x,float y,bool extend)
 }
 POINT App::SliderPoint() const
 {
-    const auto* c=ui_.Find(slider_); if(!c) return {};
+    const auto* c=ui_.Find(slider_); if(!c) throw std::invalid_argument("Slider has no visible cursor restore area.");
     const auto range=ParameterRange(static_cast<PaintParameter>(slider_-SliderFirst)); const auto t=(ParameterValue(editor_.Material().paint,static_cast<PaintParameter>(slider_-SliderFirst))-range.minimum)/(range.maximum-range.minimum);
     const auto visible=Ui::Intersect(c->rect,c->clip),image=presentation_.Image();
     const LONG x=static_cast<LONG>(std::floor(c->rect.x+8+static_cast<float>(t)*(c->rect.w-16))),y=static_cast<LONG>(std::floor(c->rect.y+c->rect.h*.5f));
@@ -536,9 +573,24 @@ LRESULT App::Message(UINT message,WPARAM wparam,LPARAM lparam)
     switch(message)
     {
     case WM_ERASEBKGND:return 1;
-    case WM_PAINT: { PAINTSTRUCT paint{}; BeginPaint(window_,&paint); EndPaint(window_,&paint); schedule_.dirty=true; if(schedule_.occluded) { schedule_.occluded=false; } return 0; }
-    case WM_SIZE:schedule_.minimized=wparam==SIZE_MINIMIZED; schedule_.dirty=true; return 0;
-    case WM_ACTIVATE: foreground_=LOWORD(wparam)!=WA_INACTIVE; gamepad_.SetForeground(foreground_ && editor_.mode==EditorMode::Drive); schedule_.active=foreground_ && editor_.mode==EditorMode::Drive; if(!foreground_) Abort(); return 0;
+    case WM_PAINT: { PAINTSTRUCT paint{}; BeginPaint(window_,&paint); EndPaint(window_,&paint); schedule_.dirty=true; return 0; }
+    case WM_SIZE:schedule_.minimized=wparam==SIZE_MINIMIZED; if(schedule_.minimized) { Abort(); accumulator_=0; } gamepad_.SetForeground(schedule_.WantsTimer()); schedule_.dirty=true; return 0;
+    case WM_SHOWWINDOW:visibility_.shown=wparam!=0; RefreshVisibility(); return 0;
+    case Renderer::VisibilityMessage:RefreshVisibility(); return 0;
+    case WM_WTSSESSION_CHANGE:
+        if(wparam==WTS_SESSION_LOCK || wparam==WTS_CONSOLE_DISCONNECT || wparam==WTS_REMOTE_DISCONNECT) visibility_.sessionAvailable=false;
+        else if(wparam==WTS_SESSION_UNLOCK || wparam==WTS_CONSOLE_CONNECT || wparam==WTS_REMOTE_CONNECT) visibility_.sessionAvailable=true;
+        VisibilityChanged(); return 0;
+    case WM_POWERBROADCAST:
+        if(wparam==PBT_POWERSETTINGCHANGE && lparam)
+        {
+            const auto* setting=reinterpret_cast<const POWERBROADCAST_SETTING*>(lparam);
+            if(setting->PowerSetting==GUID_CONSOLE_DISPLAY_STATE && setting->DataLength==sizeof(DWORD)) { DWORD state=0; std::memcpy(&state,setting->Data,sizeof(state)); visibility_.displayOn=state!=0; VisibilityChanged(); }
+        }
+        else if(wparam==PBT_APMSUSPEND) { visibility_.suspended=true; VisibilityChanged(); }
+        else if(wparam==PBT_APMRESUMEAUTOMATIC || wparam==PBT_APMRESUMESUSPEND) { visibility_.suspended=false; RefreshVisibility(); }
+        return TRUE;
+    case WM_ACTIVATE: foreground_=LOWORD(wparam)!=WA_INACTIVE; schedule_.active=foreground_ && editor_.mode==EditorMode::Drive; RefreshVisibility(); if(!foreground_) Abort(); return 0;
     case WM_KILLFOCUS:foreground_=false; schedule_.active=false; gamepad_.SetForeground(false); Abort(); return 0;
     case WM_CAPTURECHANGED:if(reinterpret_cast<HWND>(lparam)!=window_ && (ui_.capture || slider_ || modelDrag_ || trackDrag_ || orbit_ || pan_)) Abort(); return 0;
     case WM_CANCELMODE:Abort();return 0;
@@ -578,26 +630,33 @@ int App::Run()
 {
     if(options_.hidden || options_.smoke) return Tests();
     ShowWindow(window_,SW_SHOW); SetForegroundWindow(window_); SetFocus(window_); foreground_=true;
-    auto previous=std::chrono::steady_clock::now();
+    RefreshVisibility(); Pump(); return 0;
+}
+void App::Pump(std::optional<Clock::time_point> deadline)
+{
+    auto previous=Clock::now(); bool ticking=false;
     while(running_)
     {
         MSG message{}; while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) { if(message.message==WM_QUIT) running_=false; TranslateMessage(&message); DispatchMessageW(&message); }
         if(!running_) break;
-        const auto now=std::chrono::steady_clock::now(); const auto seconds=std::chrono::duration<double>(now-previous).count(); previous=now;
-        if(schedule_.WantsTimer()) Tick(seconds);
+        const auto now=Clock::now(); if(deadline && now>=*deadline) break;
+        const auto remaining=deadline ? static_cast<DWORD>(std::max(1.,std::ceil(std::chrono::duration<double,std::milli>(*deadline-now).count()))) : INFINITE;
+        const bool active=schedule_.WantsTimer();
+        if(active) Tick(ticking ? std::chrono::duration<double>(now-previous).count() : 0.);
+        previous=now; ticking=active;
         if(schedule_.WantsFrame())
         {
-            HANDLE ready=renderer_.FrameReady(); const auto result=MsgWaitForMultipleObjectsEx(1,&ready,INFINITE,QS_ALLINPUT,MWMO_INPUTAVAILABLE);
-            if(result==WAIT_OBJECT_0) Draw(); else if(result==WAIT_FAILED) throw std::runtime_error("DXGI/message wait failed.");
+            HANDLE ready=renderer_.FrameReady(); const auto result=MsgWaitForMultipleObjectsEx(1,&ready,remaining,QS_ALLINPUT,MWMO_INPUTAVAILABLE);
+            if(result==WAIT_OBJECT_0 && !PeekMessageW(&message,nullptr,0,0,PM_NOREMOVE)) Draw();
+            else if(result==WAIT_FAILED) throw std::runtime_error("DXGI/message wait failed.");
         }
         else
         {
-            const DWORD deadline=schedule_.WantsTimer() ? 8 : INFINITE;
-            if(MsgWaitForMultipleObjectsEx(0,nullptr,deadline,QS_ALLINPUT,MWMO_INPUTAVAILABLE)==WAIT_FAILED) throw std::runtime_error("Editor idle wait failed.");
+            const DWORD timeout=std::min(remaining,schedule_.WantsTimer() ? DWORD{8} : INFINITE);
+            if(MsgWaitForMultipleObjectsEx(0,nullptr,timeout,QS_ALLINPUT,MWMO_INPUTAVAILABLE)==WAIT_FAILED) throw std::runtime_error("Editor idle wait failed.");
         }
         ++wakes_;
     }
-    return 0;
 }
 void App::TestWorkflow()
 {
@@ -676,22 +735,16 @@ void App::TestUiTransactions()
 }
 int App::Tests()
 {
+    if(options_.smoke && !InputDesktopAvailable()) { std::ofstream(options_.session/"Skipped.txt")<<"Input desktop unavailable before displayed checks."; return 77; }
     const auto foreground=GetForegroundWindow(),focus=GetFocus(),capture=GetCapture(); POINT cursorBefore{}; GetCursorPos(&cursorBefore);
     if(options_.smoke) { ShowWindow(window_,SW_SHOWNOACTIVATE); SetWindowPos(window_,HWND_TOP,presentation_.originX,presentation_.originY,presentation_.width,presentation_.height,SWP_NOACTIVATE); }
-    TestWorkflow();
-    // Measure actual event-driven idle without the signaled DXGI pacing handle.
+    TestWorkflow(); TestProductionLoop();
+    // The same Pump used by Run is observed with a finite test deadline.
     MSG message{}; while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
     if(schedule_.dirty) Draw(!options_.hidden); renderer_.WaitIdle();
     const auto startPresents=renderer_.Presents(); const auto start=std::chrono::steady_clock::now();
     FILETIME created{},exit{},kernelBefore{},userBefore{},kernelAfter{},userAfter{}; GetProcessTimes(GetCurrentProcess(),&created,&exit,&kernelBefore,&userBefore);
-    unsigned idleWakes=0;
-    for(;;)
-    {
-        const auto elapsed=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(); if(elapsed>=3) break;
-        const auto wait=static_cast<DWORD>(std::ceil((3-elapsed)*1000)); MsgWaitForMultipleObjectsEx(0,nullptr,wait,QS_ALLINPUT,MWMO_INPUTAVAILABLE);
-        ++idleWakes; while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
-        if(schedule_.WantsFrame()) Draw(!options_.hidden);
-    }
+    const auto beforeWakes=wakes_; Pump(start+std::chrono::seconds(3)); const auto idleWakes=wakes_-beforeWakes;
     GetProcessTimes(GetCurrentProcess(),&created,&exit,&kernelAfter,&userAfter);
     const auto time=[](FILETIME value) { return (static_cast<uint64_t>(value.dwHighDateTime)<<32)|value.dwLowDateTime; };
     POINT cursorAfter{}; GetCursorPos(&cursorAfter);
@@ -703,7 +756,46 @@ int App::Tests()
     std::ofstream(options_.session/"GpuDebug.txt")<<renderer_.DebugMessages();
     Require(pointerPlatform_.SimulatedClean(),"Simulated pointer cleanup failed."); Require(renderer_.DebugErrors()==0,"DX12 debug layer reported warnings/errors.");
     Require(renderer_.Presents()==startPresents,"Static UI presented frames while idle.");
+    Require(idleWakes<=8,"Static production scheduler woke continuously while idle.");
     char commit[128]{}; WideCharToMultiByte(CP_UTF8,0,VEEHIICUUL3_COMMIT,-1,commit,sizeof(commit),nullptr,nullptr);
-    std::ofstream out(options_.session/"Verification.txt"); out<<"Veehiicuul3 "<<commit<<"\nAdapter: "<<renderer_.AdapterName()<<"\nHidden: "<<options_.hidden<<"\nPresents: "<<renderer_.Presents()<<"\nIdle seconds: 3\nIdle new presents: "<<renderer_.Presents()-startPresents<<"\nIdle wakes: "<<idleWakes<<"\nIdle CPU ms: "<<double(time(kernelAfter)+time(userAfter)-time(kernelBefore)-time(userBefore))/10000<<"\nDX12 warnings/errors: "<<renderer_.DebugErrors()<<"\nDebug layer enabled: "<<renderer_.HasDebugLayer()<<"\nTest acquired foreground/focus/capture: false\nObserved foreground/focus/capture stable: "<<foregroundStable<<"\nObserved user cursor stable: "<<cursorStable<<"\nCursor operations: simulated only\nPhysical input and actual ETW display association: pending\n";
+    std::ofstream out(options_.session/"Verification.txt"); out<<"Veehiicuul3 "<<commit<<"\nAdapter: "<<renderer_.AdapterName()<<"\nHidden: "<<options_.hidden<<"\nPresents: "<<renderer_.Presents()<<"\nIdle seconds: 3\nIdle new presents: "<<renderer_.Presents()-startPresents<<"\nIdle wakes: "<<idleWakes<<"\nIdle CPU ms: "<<double(time(kernelAfter)+time(userAfter)-time(kernelBefore)-time(userBefore))/10000<<"\nDX12 warnings/errors: "<<renderer_.DebugErrors()<<"\nDebug layer enabled: "<<renderer_.HasDebugLayer()<<"\nTest acquired foreground/focus/capture: false\nObserved foreground/focus/capture stable: "<<foregroundStable<<"\nObserved user cursor stable: "<<cursorStable<<"\nCursor operations: simulated only\nProduction Run/Pump path: idle and driving suspension/resume passed\nVisibility signals: synthetic show/minimize/session/display-power/cloak/suspend; OS registrations exercised, no OS state changed\nTraced Present probe branch: "<<testTracedPresents_<<" accepted submissions (no physical ETW association claim)\nPhysical input and actual ETW display association: pending\n";
+    if(options_.smoke && !InputDesktopAvailable()) { std::ofstream(options_.session/"Skipped.txt")<<"Input desktop became unavailable during displayed checks. Visual verification pending."; return 77; }
     return 0;
+}
+void App::TestProductionLoop()
+{
+    syntheticVisibility_=true; visibility_=Ui::Visibility{}; visibility_.shown=true; schedule_.minimized=false; VisibilityChanged();
+    foreground_=true; Mode(EditorMode::TrackBuilder); Command(ExampleTrack); Mode(EditorMode::Drive);
+    struct PowerSignal { GUID setting; DWORD length,value; } power{GUID_CONSOLE_DISPLAY_STATE,sizeof(DWORD),0};
+    for(bool traced:{false,true})
+    {
+        testPresentProbe_=traced;
+        const auto initialTicks=ticks_,initialPresents=renderer_.Presents();
+        held_['D']=true; Pump(Clock::now()+std::chrono::milliseconds(150));
+        Require(ticks_>initialTicks && renderer_.Presents()>initialPresents,"Production driving loop did not step/present.");
+        for(int reason=0;reason<6;++reason)
+        {
+            if(reason==0) Message(WM_SIZE,SIZE_MINIMIZED,0);
+            else if(reason==1) Message(WM_WTSSESSION_CHANGE,WTS_SESSION_LOCK,0);
+            else if(reason==2) { power.value=0; Message(WM_POWERBROADCAST,PBT_POWERSETTINGCHANGE,reinterpret_cast<LPARAM>(&power)); }
+            else if(reason==3) { visibility_.cloaked=true; Message(Renderer::VisibilityMessage,0,0); }
+            else if(reason==4) Message(WM_SHOWWINDOW,FALSE,0);
+            else Message(WM_POWERBROADCAST,PBT_APMSUSPEND,0);
+            const auto ticks=ticks_,presents=renderer_.Presents(),wakes=wakes_; Message(WM_PAINT,0,0);
+            Pump(Clock::now()+std::chrono::milliseconds(40));
+            Require(ticks_==ticks && renderer_.Presents()==presents,"Paint/dirty state resumed invisible driving or traced rendering.");
+            Require(wakes_-wakes<=4,"Suspended production scheduler polled continuously.");
+            if(reason==0) Message(WM_SIZE,SIZE_RESTORED,0);
+            else if(reason==1) Message(WM_WTSSESSION_CHANGE,WTS_SESSION_UNLOCK,0);
+            else if(reason==2) { power.value=1; Message(WM_POWERBROADCAST,PBT_POWERSETTINGCHANGE,reinterpret_cast<LPARAM>(&power)); }
+            else if(reason==3) { visibility_.cloaked=false; Message(Renderer::VisibilityMessage,0,0); }
+            else if(reason==4) Message(WM_SHOWWINDOW,TRUE,0);
+            else Message(WM_POWERBROADCAST,PBT_APMRESUMEAUTOMATIC,0);
+            held_['D']=true; Pump(Clock::now()+std::chrono::milliseconds(150));
+            Require(ticks_>ticks && renderer_.Presents()>presents,"Production driving failed to resume after visibility notification.");
+        }
+    }
+    Require(testTracedPresents_>0,"Production scheduler did not exercise traced Present branch.");
+    testPresentProbe_=false; Mode(EditorMode::ModelBuilder); foreground_=false; schedule_.active=false;
+    syntheticVisibility_=false; RefreshVisibility(); Change();
 }

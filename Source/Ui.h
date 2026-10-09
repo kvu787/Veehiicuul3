@@ -67,6 +67,11 @@ private:
 };
 // Dirty state alone cannot cause frames while minimized or occluded. Active
 // work is a separately armed timer; idle static editing has no timer.
+struct Visibility
+{
+    bool shown=false,sessionAvailable=true,desktopAvailable=true,displayOn=true,cloaked=false,suspended=false;
+    bool Blocked() const { return !shown || !sessionAvailable || !desktopAvailable || !displayOn || cloaked || suspended; }
+};
 struct Schedule
 {
     bool dirty=true,minimized=false,occluded=false,active=false;

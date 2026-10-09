@@ -34,8 +34,8 @@ public:
     std::string DebugMessages() const;
     bool HasDebugLayer() const { return infoQueue_ != nullptr; }
     void WaitIdle();
-    bool Occluded() const { return occluded_; }
-    bool TestVisibility();
+    static constexpr UINT VisibilityMessage=WM_APP+23;
+    void StopVisibilityNotifications();
     uint64_t Presents() const { return presents_; }
 private:
     template<class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
@@ -63,6 +63,9 @@ private:
     ComPtr<ID3D12Device> device_;
     ComPtr<ID3D12CommandQueue> queue_;
     ComPtr<IDXGISwapChain3> swapChain_;
+    ComPtr<IDXGIFactory6> factory_;
+    DWORD occlusionCookie_=0;
+    bool occlusionRegistered_=false;
     ComPtr<ID3D12DescriptorHeap> renderHeap_, depthHeap_;
     std::array<ComPtr<ID3D12Resource>, 2> targets_;
     ComPtr<ID3D12Resource> depth_;
@@ -76,7 +79,6 @@ private:
     ComPtr<ID3D12Resource> atlasTexture_,surface_;
     ComPtr<ID3D12DescriptorHeap> textureHeap_;
     uint64_t atlasRevision_=0,presents_=0;
-    bool occluded_=false;
     unsigned displayWidth_=1,displayHeight_=1;
     std::array<Frame, 2> frames_;
     ComPtr<ID3D12Resource> materials_;

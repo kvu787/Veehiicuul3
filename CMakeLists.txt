@@ -83,7 +83,7 @@ add_executable(Veehiicuul3 WIN32 Source/Main.cpp Source/App.cpp Source/TextAtlas
 target_link_options(Veehiicuul3 PRIVATE /MANIFEST:NO)
 target_include_directories(Veehiicuul3 PRIVATE Source "${GeneratedDirectory}")
 target_compile_definitions(Veehiicuul3 PRIVATE VEEHIICUUL3_COMMIT=L"${Veehiicuul3Commit}")
-target_link_libraries(Veehiicuul3 PRIVATE EditorCore DisplaySelection RelativeSliderInput d3d12 dxgi user32 gdi32 comdlg32 shell32 dwmapi dwrite)
+target_link_libraries(Veehiicuul3 PRIVATE EditorCore DisplaySelection RelativeSliderInput d3d12 dxgi user32 gdi32 comdlg32 shell32 dwmapi dwrite wtsapi32 uuid)
 target_link_libraries(Veehiicuul3 PRIVATE GamepadBackend DisplayTracking version)
 copy_gameinput(Veehiicuul3)
 add_custom_command(TARGET Veehiicuul3 POST_BUILD

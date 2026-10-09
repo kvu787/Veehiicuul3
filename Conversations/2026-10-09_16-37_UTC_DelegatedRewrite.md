@@ -176,3 +176,17 @@ The following are recovery notes, not reconstructed verbatim quotes. The parent 
 The corrected 45f24f build remains the ready snapshot. I'm finishing selected-part framing and checking the exact Present-result diagnostics with the strict assertion intact, then I'll package and report the next verified build.
 
 The displayed rerun passed: all 122 instrumented submissions returned S_OK, with zero idle presents and zero DX12 warnings. The earlier failure's HRESULT was never recorded, so its cause is still unknown. The strict acceptance check remains; new diagnostics will retain the exact result if it recurs. The launchers now also preserve a failing exit code across their pause.
+
+Selected-part framing is committed locally and passes the controller and GPU workflow checks. It fits the transformed part through "Frame selected" or Shift+F without changing saved model data. I'm running the committed-source and copied-snapshot gates before advancing `RunLatestBuild.cmd`.
+
+All 31 committed-source Release checks passed, including both NE18NZ2 displayed checks. Debug and the self-contained copy checks are running. The snapshot will retain the strict Present assertion and the original failure evidence; I haven't identified that earlier status as an expected condition.
+
+A new verified build is ready at `C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_18-20-19-807_58531551af57`; `RunLatestBuild.cmd` now selects it.
+
+It adds selected-part framing and exact diagnostics before the strict Present assertion, plus launcher exit-code fixes. Source commit: `58531551af572944958c3fa173f4f2bda9d9ac14`. Release passed 31 checks, Debug passed 29, and copied hardware/WARP checks passed hidden and displayed on NE18NZ2. Physical mouse/gamepad and panel-latency checks remain pending.
+
+The actual latest-build CMD launcher also passed from an unrelated directory: all 136 instrumented submissions were S_OK, with zero extra idle presents and zero GPU warnings. All 82 snapshot hashes match, every file is read-only, and both older snapshots remain intact. I'm recording the delivery checkpoint and remaining parity work.
+
+## Delivery outcome
+
+Ready snapshot source: 58531551af572944958c3fa173f4f2bda9d9ac14. Functional change: 9d265b927cb85846af605c5800c69e7c389667dd. Checkpoint documentation: b81412c. All commits after the never-push instruction remain local. The new ready snapshot is a verified staged migration build, with the next small functional binding (outline RGB editing) and remaining physical/notification/latency checks explicitly recorded in Documentation/Parity.md and Documentation/Verification.md. The unexplained original instrumented-Present smoke failure is retained without relaxing the strict assertion or claiming an expected HRESULT.

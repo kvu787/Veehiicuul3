@@ -322,3 +322,29 @@ The bounded vector field applies atomically, retains rejected drafts, preserves 
 Release 34/34, Debug 32/32, copied hidden/displayed hardware/WARP and actual CMD launcher checks passed. All 130 hashes match; 131 files are read-only; older snapshots are intact. NE18NZ2 tests preserved foreground/focus/capture and recorded zero idle presents. No process or delivery blocker remains.
 
 Physical input/global clipboard, real notifications/display association and electrical power remain unverified. Next existing mode binding: selected checkered-line/checkpoint center, heading and width editing. References remain unchanged; all new commits are local.
+
+## Parent next binding delegation (verbatim)
+
+The verified knot-authoring build has been announced in the main conversation. Continue the next existing V2 mode binding: selected checkered-line/checkpoint center, heading and width editing. Inspect the actual V2 contract first, keep controls minimal, preserve the 2D-only domain, validate numeric inputs atomically, and cover cancel, undo/redo, dirty tracking, persistence and Drive behavior. Avoid unrelated framework additions. Package a verified immutable build when ready and report its identity and test limitations. Keep reference repositories read-only and visible tests exclusively on NE18NZ2; continue noninteractive work when locked. All commits remain local.
+
+## Assistant gate implementation progress (verbatim)
+
+I’ll inspect Veehiicuul2’s gate-editing contract, then bind selected checkered-line and checkpoint edits to the existing numeric controls. I’ll test cancellation, history, persistence and Drive behavior before packaging the next build.
+
+Veehiicuul2 edits a gate’s center, forward heading in degrees and width. The heading follows the crossing arrow: 0 degrees points toward +X, and 90 toward +Y. I’ll preserve that convention, keep built road surfaces during gate edits, and disable Drive when a placement fails the existing race checks.
+
+## Parent bounded knot review and gate status request (verbatim)
+
+The frozen knot-authoring review found no actionable defect; exact sampled-boundary equality and the documented synthetic-input limits were confirmed. Please share a brief update on the gate controls, including the V2 contract you found, current test stage and any blocker, then continue.
+
+## Assistant gate progress (verbatim)
+
+V2 applies all four gate fields together, with width limited to 0.1-1000 m and heading following the directed crossing arrow. The controls and planar transaction code are implemented. Fields now form an unapplied draft; Apply validates the whole candidate, while Cancel preserves the prior gate. I’m adding routed tests now, with no blocker open.
+
+The gate code is in place. The first build caught a variable-shadowing warning under the strict compiler settings; I’m correcting it and testing that an invalid active field cannot let Apply commit an older draft.
+
+The first test run found a width-boundary case and a clipped-slider test fixture overlapped by the new sidebar controls. I’ve isolated the fixture and kept its assertions intact; I’m diagnosing the width case before running the displayed checks.
+
+The hidden hardware and WARP workflows passed the routed gate tests, including cancellation, undo/redo, save/reload and Drive rejection. The boundary failure was a 1000 m gate rounding to 1000.0000000000001 m; I’ve corrected that calculation without relaxing file validation, and the full rerun is underway.
+
+All 33 noninteractive checks now pass, including hidden hardware/WARP and gate transaction coverage. I’m documenting the recovered V2 behavior and splitting the domain and UI changes into local commits, then I’ll run the displayed and copied-build gates on NE18NZ2.

@@ -42,6 +42,9 @@ public:
     void BeginPaint();
     void PreviewPaint(PaintParameter parameter,double value);
     bool EndPaint(bool cancel=false);
+    void BeginOutlineColor();
+    void PreviewOutlineColor(unsigned channel,double value);
+    bool EndOutlineColor(bool cancel=false);
     void Mode(EditorMode next);
     void BuildTrack();
     void NewTrack(bool example);
@@ -53,4 +56,6 @@ private:
     std::vector<ModelState> modelUndo_,modelRedo_;
     std::vector<TrackProject> trackUndo_,trackRedo_;
     std::optional<ModelState> paintStart_;
+    std::optional<TrackProject> colorStart_;
+    int colorOutline_=-1;
 };

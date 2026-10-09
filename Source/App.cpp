@@ -19,6 +19,8 @@ enum Id { ModeMenu=1,FileMenu,UndoAction,RedoAction,FrameAction,CageAction,QuitA
     RemoveOutline,RemoveCheckpoint,RemoveDecoration,
     Speed=2300,PreviewLevel,EditStep,SpawnX=3000,SpawnY,SpawnHeading,VehicleScale,PointX,PointY,PointWeight,DecorX,DecorY,DecorHeading,DecorHeight,DecorScale,DeadzoneX,DeadzoneY };
 constexpr int ObjectFirst=1000,MaterialFirst=1100,OutlineFirst=1200,PointFirst=1300,DecorFirst=1400,SliderFirst=2000,PaintFirst=2100,TransformFirst=2200;
+constexpr int OutlineColorFirst=3100,OutlineColorSliderFirst=3110;
+bool OutlineColorSlider(int id) { return id>=OutlineColorSliderFirst && id<OutlineColorSliderFirst+3; }
 std::wstring Wide(const std::string& s)
 {
     const auto n=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,s.data(),static_cast<int>(s.size()),nullptr,0);
@@ -158,6 +160,13 @@ void App::Interface()
         if(editor_.outline>=0 && static_cast<size_t>(editor_.outline)<editor_.track.track.outlines.size())
         {
             const auto& curve=editor_.track.track.outlines[static_cast<size_t>(editor_.outline)];
+            label(L"Surface color (unlit sRGB)");
+            const wchar_t* names[]={L"Red",L"Green",L"Blue"};
+            for(int i=0;i<3;++i)
+            {
+                number(OutlineColorFirst+i,names[i],curve.colorSrgb[static_cast<size_t>(i)],0,1);
+                Ui::Control c; c.id=OutlineColorSliderFirst+i; c.kind=Ui::Kind::Slider; c.rect={12,y,404,30}; c.value=curve.colorSrgb[static_cast<size_t>(i)]; ui_.Add(c); y+=36;
+            }
             for(size_t i=0;i<curve.controls.size();++i) button(PointFirst+static_cast<int>(i),L"Control point "+std::to_wstring(i+1),true,editor_.point==static_cast<int>(i));
             if(editor_.point>=0 && static_cast<size_t>(editor_.point)<curve.controls.size()) { const auto p=curve.controls[static_cast<size_t>(editor_.point)]; number(PointX,L"Point X",p.position.x,-10000,10000); number(PointY,L"Point Y",p.position.y,-10000,10000); number(PointWeight,L"NURBS weight",p.weight,.001,1000); }
         }
@@ -191,15 +200,18 @@ void App::Actions(const std::vector<Ui::Action>& actions)
     {
         if(a.kind==Ui::ActionKind::BeginSlider)
         {
-            editor_.BeginPaint(); slider_=a.id; POINT anchor{}; GetCursorPos(&anchor);
+            if(OutlineColorSlider(a.id)) editor_.BeginOutlineColor(); else editor_.BeginPaint();
+            slider_=a.id; POINT anchor{}; GetCursorPos(&anchor);
             relative_.Begin(window_,window_,anchor);
         }
         else if(a.kind==Ui::ActionKind::EndSlider || a.kind==Ui::ActionKind::CancelSlider)
         {
-            if(editor_.EndPaint(a.kind==Ui::ActionKind::CancelSlider)) modifiedModel_=true;
+            const bool color=OutlineColorSlider(slider_),cancel=a.kind==Ui::ActionKind::CancelSlider;
+            if(color) { if(editor_.EndOutlineColor(cancel)) modifiedTrack_=true; }
+            else if(editor_.EndPaint(cancel)) modifiedModel_=true;
             POINT point{}; bool restore=!options_.hidden && !options_.smoke;
             try { point=SliderPoint(); } catch(const std::invalid_argument&) { restore=false; }
-            slider_=0; relative_.End(point,restore); Change(false);
+            slider_=0; relative_.End(point,restore); if(color) schedule_.dirty=true; else Change(false);
         }
         else Command(a.id,a.value);
     }
@@ -240,6 +252,11 @@ void App::Command(int id,double value)
     else if(id==PreviewLevel) { if(value!=std::floor(value)) throw std::invalid_argument("Preview level must be an integer."); editor_.ModelEdit([&] { editor_.Object().subdivisionLevel=static_cast<unsigned>(value); }); }
     else if(id==EditStep) { editor_.step=static_cast<float>(value); Change(false); return; }
     else if(id==Speed) { ValidateDragSpeed(value); editor_.model.scene.sliderDragSpeed=value; modifiedModel_=true; Change(false); return; }
+    else if(id>=OutlineColorFirst && id<OutlineColorFirst+3)
+    {
+        editor_.PreviewOutlineColor(static_cast<unsigned>(id-OutlineColorFirst),value);
+        if(editor_.EndOutlineColor()) modifiedTrack_=true; schedule_.dirty=true; return;
+    }
     else if(id>=PaintFirst && id<PaintFirst+8) { editor_.PreviewPaint(static_cast<PaintParameter>(id-PaintFirst),value); editor_.EndPaint(); Change(false); modifiedModel_=true; return; }
     else if(id>=TransformFirst && id<TransformFirst+7)
     {
@@ -291,6 +308,16 @@ void App::Geometry()
     }
     if(overlayDirty_) { Overlay(); overlayDirty_=false; ++geometry_.revision; }
     if(editor_.mode==EditorMode::ModelBuilder) CompileSceneMaterials(editor_.model.scene,paints_,surfaces_);
+    else if(editor_.generated)
+    {
+        bool changed=false;
+        for(size_t i=0;i<editor_.track.track.outlines.size();++i)
+        {
+            const auto color=editor_.track.track.outlines[i].colorSrgb;
+            if(shown_.objects.at(i).unlitColorSrgb!=color) { shown_.objects[i].unlitColorSrgb=color; changed=true; }
+        }
+        if(changed) CompileSceneMaterials(shown_,paints_,surfaces_);
+    }
 }
 void App::Overlay()
 {
@@ -428,7 +455,7 @@ void App::Pick(float x,float y,bool extend)
 POINT App::SliderPoint() const
 {
     const auto* c=ui_.Find(slider_); if(!c) throw std::invalid_argument("Slider has no visible cursor restore area.");
-    const auto range=ParameterRange(static_cast<PaintParameter>(slider_-SliderFirst)); const auto t=(ParameterValue(editor_.Material().paint,static_cast<PaintParameter>(slider_-SliderFirst))-range.minimum)/(range.maximum-range.minimum);
+    const auto t=(SliderValue()-c->minimum)/(c->maximum-c->minimum);
     const auto visible=Ui::Intersect(c->rect,c->clip),image=presentation_.Image();
     const LONG x=static_cast<LONG>(std::floor(c->rect.x+8+static_cast<float>(t)*(c->rect.w-16))),y=static_cast<LONG>(std::floor(c->rect.y+c->rect.h*.5f));
     auto point=SliderCursorPoint({x,y,x+1,y+1},{static_cast<LONG>(std::ceil(visible.x)),static_cast<LONG>(std::ceil(visible.y)),static_cast<LONG>(std::ceil(visible.x+visible.w)),static_cast<LONG>(std::ceil(visible.y+visible.h))});
@@ -439,8 +466,9 @@ void App::Abort(bool restore)
 {
     const bool changedGeometry=modelDrag_ || trackDrag_;
     restore=restore && GetForegroundWindow()==window_ && GetCapture()==window_;
+    editor_.EndPaint(true); editor_.EndOutlineColor(true);
     POINT point{}; if(restore && slider_) { try { point=SliderPoint(); } catch(...) { restore=false; } }
-    relative_.End(point,restore); editor_.EndPaint(true); slider_=0; ui_.Cancel();
+    relative_.End(point,restore); slider_=0; ui_.Cancel();
     if(modelDrag_) editor_.model=dragStart_; if(trackDrag_) editor_.track=trackStart_;
     modelDrag_=trackDrag_=orbit_=pan_=false; held_.fill(false);
     if(!options_.hidden && !options_.smoke && GetCapture()==window_) ReleaseCapture();
@@ -453,9 +481,21 @@ void App::RawMouse(HRAWINPUT input)
     const auto* raw=reinterpret_cast<const RAWINPUT*>(bytes.data());
     if(slider_ && raw->header.dwType==RIM_TYPEMOUSE && !(raw->data.mouse.usFlags&MOUSE_MOVE_ABSOLUTE))
     {
-        const auto p=static_cast<PaintParameter>(slider_-SliderFirst); const auto* c=ui_.Find(slider_);
-        editor_.PreviewPaint(p,DraggedValue(ParameterValue(editor_.Material().paint,p),raw->data.mouse.lLastX,c->rect.w-16,editor_.model.scene.sliderDragSpeed,p)); Change(false);
+        DragSlider(raw->data.mouse.lLastX);
     }
+}
+double App::SliderValue() const
+{
+    if(OutlineColorSlider(slider_)) return editor_.track.track.outlines.at(static_cast<size_t>(editor_.outline)).colorSrgb.at(static_cast<size_t>(slider_-OutlineColorSliderFirst));
+    return ParameterValue(editor_.Material().paint,static_cast<PaintParameter>(slider_-SliderFirst));
+}
+void App::DragSlider(LONG counts)
+{
+    const auto* c=ui_.Find(slider_); if(!c) throw std::invalid_argument("Slider is no longer available.");
+    const bool color=OutlineColorSlider(slider_); const auto p=static_cast<PaintParameter>(slider_-(color ? OutlineColorSliderFirst : SliderFirst));
+    const auto value=DraggedValue(SliderValue(),counts,c->rect.w-16,editor_.model.scene.sliderDragSpeed,color ? PaintRange{0,1,10000} : ParameterRange(p));
+    if(color) { editor_.PreviewOutlineColor(static_cast<unsigned>(slider_-OutlineColorSliderFirst),value); schedule_.dirty=true; }
+    else { editor_.PreviewPaint(p,value); Change(false); }
 }
 void App::Pointer(UINT message,float x,float y,WPARAM buttons)
 {
@@ -557,6 +597,15 @@ void App::OpenModel(const std::filesystem::path& path)
     auto scene=LoadScene(path); editor_.ModelEdit([&] { editor_.model.scene=scene; editor_.model.selection={SelectionMode::Object,0,-1,{},0}; });
     modelPath_=path; modifiedModel_=false; editor_.Frame(); Change();
 }
+void App::SaveTrackProject(const std::filesystem::path& path)
+{
+    SaveTrack(editor_.track,path); trackPath_=path; modifiedTrack_=false;
+}
+void App::OpenTrackProject(const std::filesystem::path& path)
+{
+    auto track=LoadTrack(path); editor_.TrackEdit([&] { editor_.track=track; });
+    trackPath_=path; modifiedTrack_=false; editor_.outline=0; editor_.point=0; editor_.BuildTrack(); editor_.Frame(); Change();
+}
 void App::File(int action)
 {
     if(options_.hidden || options_.smoke || editor_.mode==EditorMode::Drive) return;
@@ -573,9 +622,9 @@ void App::File(int action)
         if(!(save ? GetSaveFileNameW(&dialog) : GetOpenFileNameW(&dialog))) return; path=filename;
     }
     if(action==ExportFile) ExportMesh(editor_.model.scene,path);
-    else if(save) { if(model) SaveModel(path); else { SaveTrack(editor_.track,path); trackPath_=path; modifiedTrack_=false; } }
+    else if(save) { if(model) SaveModel(path); else SaveTrackProject(path); }
     else if(model) OpenModel(path);
-    else { auto track=LoadTrack(path); editor_.TrackEdit([&] { editor_.track=track; }); trackPath_=path; modifiedTrack_=false; editor_.outline=0; editor_.point=0; editor_.BuildTrack(); editor_.Frame(); }
+    else OpenTrackProject(path);
     status_=L"Saved/opened: "+path.filename().wstring(); Change();
 }
 LRESULT App::Message(UINT message,WPARAM wparam,LPARAM lparam)
@@ -682,7 +731,7 @@ void App::TestWorkflow()
     Command(NewPrimitive); Command(CopyPaint); editor_.model.selection.mode=SelectionMode::Face; editor_.model.selection.face=0; Command(AssignPaint); Command(PaintFirst,.7); Command(ExtrudeAction); Command(RefineAction);
     SaveScene(editor_.model.scene,options_.session/"TwoPaint.modeler"); ExportMesh(editor_.model.scene,options_.session/"TwoPaint.h");
     const auto authored=SerializeScene(editor_.model.scene); Draw(!options_.hidden); renderer_.Capture(options_.session/"Model2560x1440.bmp");
-    Mode(EditorMode::TrackBuilder); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
+    Mode(EditorMode::TrackBuilder); TestTrackColors(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
     SaveTrack(editor_.track,options_.session/"ExampleCircuit.track");
     Mode(EditorMode::Drive); for(int i=0;i<120;++i) { Tick(1./120,true); if(i%30==0) Draw(!options_.hidden); }
     Draw(!options_.hidden); renderer_.Capture(options_.session/"Drive2560x1440.bmp");
@@ -713,6 +762,69 @@ void App::TestWorkflow()
             else for(int c=0;c<3;++c) Require(presented[output+c]==0,"Presentation margin is not black.");
         }
     }
+}
+void App::TestTrackColors()
+{
+    Command(ExampleTrack); editor_.outline=0;
+    const auto path=options_.session/"OutlineColors.track"; SaveTrackProject(path);
+    const auto model=SerializeScene(editor_.model.scene),vehicle=SerializeScene(editor_.track.vehicle);
+    auto reveal=[&](int id) {
+        Interface(); const auto* c=ui_.Find(id); Require(c!=nullptr,"Outline color control missing.");
+        ui_.scroll+=c->rect.y-ui_.panel.y; Interface(); c=ui_.Find(id);
+        const auto visible=Ui::Intersect(c->rect,c->clip); Require(visible.h>0 && ui_.Hit(visible.x+8,visible.y+4)==id,"Color control clipping/hit routing failed.");
+        return visible;
+    };
+    auto edit=[&](int channel,const wchar_t* value,bool cancel=false) {
+        const auto r=reveal(OutlineColorFirst+channel); Actions(ui_.Down(r.x+8,r.y+4));
+        ui_.Replace(value); Key(cancel ? VK_ESCAPE : VK_RETURN);
+    };
+    edit(0,L"1.7e-1"); edit(1,L".36"); edit(2,L".74");
+    Require(modifiedTrack_ && editor_.track.track.outlines[0].colorSrgb==std::array<double,3>{.17,.36,.74},"Numeric RGB commits failed or bypassed unsaved warning.");
+    SaveTrackProject(path); const auto clean=SerializeTrack(editor_.track);
+    edit(0,L".17"); Require(!modifiedTrack_,"Equal numeric RGB value marked a clean track unsaved.");
+    edit(1,L".99",true); Require(!modifiedTrack_ && SerializeTrack(editor_.track)==clean,"Numeric RGB cancel changed clean authoring.");
+    edit(1,L"2"); Require(ui_.invalid && !modifiedTrack_ && SerializeTrack(editor_.track)==clean,"Invalid numeric RGB value was accepted."); Key(VK_ESCAPE);
+    const auto geometry=editor_.generated->surfaces[0].data();
+    auto begin=[&](int channel) { const auto r=reveal(OutlineColorSliderFirst+channel); Actions(ui_.Down(r.x+8,r.y+4)); Require(relative_.Active(),"RGB slider did not share relative pointer ownership."); };
+    Draw(!options_.hidden); const auto revision=geometry_.revision;
+    begin(0); DragSlider(100000); Draw(!options_.hidden);
+    Require(editor_.track.track.outlines[0].colorSrgb[0]==1,"RGB drag did not reach exact unlit white.");
+    Require(geometry_.revision==revision,"RGB preview rebuilt unchanged geometry.");
+    Require(shown_.objects[0].materialKind==MaterialKind::UnlitGround && surfaces_[0]==CompileSurfaceMaterial(shown_.objects[0]),"RGB preview did not update the explicit unlit material.");
+    Actions(ui_.Cancel()); Draw(!options_.hidden);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==clean && pointerPlatform_.SimulatedClean() && geometry_.revision==revision,"RGB slider cancel changed clean state, rebuilt geometry or leaked ownership.");
+    begin(0); DragSlider(-100000); Actions(ui_.Up(0,0));
+    Require(modifiedTrack_ && editor_.track.track.outlines[0].colorSrgb[0]==0,"RGB relative drag commit failed or bypassed unsaved warning.");
+    Command(UndoAction); Require(SerializeTrack(editor_.track)==clean && editor_.generated->surfaces[0].data()==geometry,"RGB gesture undo lost color or built geometry.");
+    Command(RedoAction); Require(editor_.track.track.outlines[0].colorSrgb[0]==0 && editor_.generated->surfaces[0].data()==geometry,"RGB redo lost color or built geometry.");
+    SaveTrackProject(path); begin(0); Actions(ui_.Up(0,0)); Require(!modifiedTrack_,"Unchanged RGB drag marked a clean track unsaved.");
+    Command(OutlineColorFirst+2,.22); const auto dirty=SerializeTrack(editor_.track); begin(1); DragSlider(100000); Actions(ui_.Cancel());
+    Require(modifiedTrack_ && SerializeTrack(editor_.track)==dirty,"RGB cancel cleared previously committed unsaved changes.");
+    SaveTrackProject(path);
+    for(UINT message:std::array<UINT,2>{WM_CAPTURECHANGED,WM_KILLFOCUS})
+    {
+        begin(1); DragSlider(100000); Message(message,0,0);
+        Require(!modifiedTrack_ && SerializeTrack(editor_.track)==dirty && !ui_.capture && !relative_.Active() && pointerPlatform_.SimulatedClean(),"RGB capture/focus loss failed to cancel cleanly.");
+    }
+    for(int height=1;height<=4;++height) for(bool escape:{false,true})
+    {
+        Interface(); auto& c=*std::find_if(ui_.controls.begin(),ui_.controls.end(),[](const Ui::Control& control){return control.id==OutlineColorSliderFirst;});
+        c.rect={12,32.f+height,404,30}; c.clip={12,62,404,static_cast<float>(height)};
+        Actions(ui_.Down(32,62.5f)); const auto point=SliderPoint();
+        const auto y=point.y-presentation_.originY-static_cast<LONG>(presentation_.Image().y);
+        Require(y>=62 && y<62+height,"RGB clipped cursor restore left its 1-4 pixel visible intersection.");
+        if(escape) Key(VK_ESCAPE); else Actions(ui_.Up(32,62.5f));
+        Require(!modifiedTrack_ && !ui_.capture && !relative_.Active() && pointerPlatform_.SimulatedClean(),"RGB clipped release/cancel leaked ownership or dirty state.");
+    }
+    begin(1); DragSlider(100000); Mode(EditorMode::ModelBuilder); Mode(EditorMode::TrackBuilder);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==dirty,"Mode change failed to cancel an RGB gesture.");
+    Command(OutlineColorFirst,.63); OpenTrackProject(path);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==dirty,"RGB save/reload did not use the production clean-track path.");
+    Mode(EditorMode::Drive); Tick(.02,true); Mode(EditorMode::TrackBuilder);
+    Require(SerializeTrack(editor_.track)==dirty && SerializeScene(editor_.model.scene)==model && SerializeScene(editor_.track.vehicle)==vehicle,"RGB Drive transition mutated track or SimplePaint assets.");
+    reveal(OutlineColorFirst); Draw(!options_.hidden); renderer_.Capture(options_.session/"OutlineColors2560x1440.bmp");
+    std::ofstream(options_.session/"OutlineColorVerification.txt")<<"Numeric scientific/invalid/cancel/no-op and relative drag commit/cancel/capture/focus-loss passed\nClipped RGB release/Escape cursor restore: 1-4 pixel intersections passed\nClean saved/reloaded and previously dirty state preserved\nRGB gesture preview/cancel added no geometry revision\nBuilt geometry retained across RGB undo/redo and Drive\nExplicit unlit RGB material retained; model/vehicle SimplePaint unchanged\nPhysical raw mouse delivery: pending\n";
+    trackPath_.clear();
 }
 void App::TestUiTransactions()
 {

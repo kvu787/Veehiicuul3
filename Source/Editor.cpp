@@ -2,6 +2,22 @@
 #include <algorithm>
 #include <numeric>
 
+namespace
+{
+bool SameTrackGeometry(const Racing2D::Track& a,const Racing2D::Track& b)
+{
+    if(a.outlines.size()!=b.outlines.size()) return false;
+    for(size_t i=0;i<a.outlines.size();++i)
+    {
+        const auto& x=a.outlines[i]; const auto& y=b.outlines[i];
+        if(x.degree!=y.degree || x.knots!=y.knots || x.controls.size()!=y.controls.size()) return false;
+        for(size_t p=0;p<x.controls.size();++p)
+            if(x.controls[p].position!=y.controls[p].position || x.controls[p].weight!=y.controls[p].weight) return false;
+    }
+    return true;
+}
+}
+
 ModelObject& Editor::Object()
 {
     if(model.selection.object<0 || static_cast<size_t>(model.selection.object)>=model.scene.objects.size()) throw std::invalid_argument("Select a model part first.");
@@ -55,7 +71,8 @@ void Editor::Undo(bool redo)
     else
     {
         auto& from=redo ? trackRedo_ : trackUndo_; auto& to=redo ? trackUndo_ : trackRedo_;
-        to.push_back(track); track=std::move(from.back()); from.pop_back(); generated.reset();
+        const bool sameGeometry=SameTrackGeometry(track.track,from.back().track);
+        to.push_back(track); track=std::move(from.back()); from.pop_back(); if(!sameGeometry) generated.reset();
     }
 }
 void Editor::AddShape(int kind)
@@ -95,9 +112,28 @@ bool Editor::EndPaint(bool cancel)
     else if(changed) { if(modelUndo_.size()>=128) modelUndo_.erase(modelUndo_.begin()); modelUndo_.push_back(*paintStart_); modelRedo_.clear(); }
     paintStart_.reset(); return changed;
 }
+void Editor::BeginOutlineColor()
+{
+    if(mode!=EditorMode::TrackBuilder || outline<0 || static_cast<size_t>(outline)>=track.track.outlines.size()) throw std::invalid_argument("Select a track outline to edit its color.");
+    if(!colorStart_) { colorStart_=track; colorOutline_=outline; }
+    if(colorOutline_!=outline) throw std::invalid_argument("Finish the current outline color gesture first.");
+}
+void Editor::PreviewOutlineColor(unsigned channel,double value)
+{
+    if(channel>=3 || !std::isfinite(value) || value<0 || value>1) throw std::invalid_argument("Outline RGB values must be in [0,1].");
+    BeginOutlineColor(); track.track.outlines.at(static_cast<size_t>(colorOutline_)).colorSrgb[channel]=value;
+}
+bool Editor::EndOutlineColor(bool cancel)
+{
+    if(!colorStart_) return false;
+    const bool changed=!cancel && track.track.outlines.at(static_cast<size_t>(colorOutline_)).colorSrgb!=colorStart_->track.outlines.at(static_cast<size_t>(colorOutline_)).colorSrgb;
+    if(cancel) track=std::move(*colorStart_);
+    else if(changed) { if(trackUndo_.size()>=128) trackUndo_.erase(trackUndo_.begin()); trackUndo_.push_back(std::move(*colorStart_)); trackRedo_.clear(); }
+    colorStart_.reset(); colorOutline_=-1; return changed;
+}
 void Editor::Mode(EditorMode next)
 {
-    if(mode==next) return; EndPaint();
+    if(mode==next) return; EndPaint(); EndOutlineColor();
     if(next==EditorMode::Drive)
     {
         if(!draft.empty() || gateStart) throw std::invalid_argument("Finish or cancel the current outline/gate first.");

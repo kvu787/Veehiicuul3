@@ -72,12 +72,15 @@ inline void ValidateDragSpeed(double speed)
 {
     if(!std::isfinite(speed) || speed<.0001 || speed>10) throw std::invalid_argument("Drag speed must be in [0.0001,10]. Use 1 for normal, 0.1 for fine, or 0.01 for very fine.");
 }
-inline double DraggedValue(double value,double pixels,double channelWidth,double speed,PaintParameter parameter)
+inline double DraggedValue(double value,double pixels,double channelWidth,double speed,PaintRange range)
 {
     ValidateDragSpeed(speed);
     if(!std::isfinite(pixels) || !std::isfinite(channelWidth) || channelWidth<1) throw std::invalid_argument("Invalid slider drag coordinates.");
-    const auto range=ParameterRange(parameter);
     // Constrain intentional pointer movement to the shader's real domain.
     // No conversion through the integer thumb position occurs here.
     return std::clamp(value+pixels/channelWidth*(range.maximum-range.minimum)*speed,range.minimum,range.maximum);
+}
+inline double DraggedValue(double value,double pixels,double channelWidth,double speed,PaintParameter parameter)
+{
+    return DraggedValue(value,pixels,channelWidth,speed,ParameterRange(parameter));
 }

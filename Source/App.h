@@ -39,10 +39,15 @@ private:
     void TransformKey(UINT key,bool shift);
     void Abort(bool restore=false);
     POINT SliderPoint() const;
+    double SliderValue() const;
+    void DragSlider(LONG counts);
     void RawMouse(HRAWINPUT input);
     void File(int action);
     void SaveModel(const std::filesystem::path& path);
     void OpenModel(const std::filesystem::path& path);
+    void SaveTrackProject(const std::filesystem::path& path);
+    void OpenTrackProject(const std::filesystem::path& path);
+    void TestTrackColors();
     void TestUiTransactions();
     void TestProductionLoop();
     void TestWorkflow();

@@ -8,6 +8,8 @@ DirectWrite shapes/rasterizes text into a bounded coverage atlas; DX12 composite
 
 The preserved domain boundary includes Catmull-Clark cages, inherited face materials, serialization/export, exact embedded SlopeCar data, the original SimplePaint module, NURBS tessellation and planar Racing2D. Racing2D has no renderer, HWND or 3D spatial dependency. Track/vehicle presentation derives from that 2D state. GameInput reading timestamps and consumed-reading display correlation remain distinct from input-to-physical-display verification.
 
+Outline RGB editing uses the same numeric fields, clipped slider hit testing, relative pointer ownership and raw-count drag math as model paint. Its domain is explicitly [0,1]; SimplePaint retains its own reserved margins. A held color gesture keeps one temporary authored track snapshot, commits one bounded track-history entry or cancels without touching history/dirty state. Material preview/cancel updates the unlit constants without increasing geometry revision or regenerating boundaries. Track undo/redo retains generated boundaries when degree/knots/control positions/weights are identical and invalidates them after shape changes. Relative color dragging uses the existing model-scene numeric drag-speed setting; no new persistence field or format version is introduced.
+
 ## Current scope
 
 Pointer-driven buttons, lists, menus, toggle actions, clipping/scroll synchronization, captured drags, numeric text editing, cancellation and DPI layout are required. Relative paint dragging hides and restores the cursor and uses raw horizontal counts; drag speed is numeric only. Mode changes keep independently authored model and track state. A neutral UI palette keeps 3D semantic colors.

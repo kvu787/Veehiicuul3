@@ -190,3 +190,17 @@ The actual latest-build CMD launcher also passed from an unrelated directory: al
 ## Delivery outcome
 
 Ready snapshot source: 58531551af572944958c3fa173f4f2bda9d9ac14. Functional change: 9d265b927cb85846af605c5800c69e7c389667dd. Checkpoint documentation: b81412c. All commits after the never-push instruction remain local. The new ready snapshot is a verified staged migration build, with the next small functional binding (outline RGB editing) and remaining physical/notification/latency checks explicitly recorded in Documentation/Parity.md and Documentation/Verification.md. The unexplained original instrumented-Present smoke failure is retained without relaxing the strict assertion or claiming an expected HRESULT.
+
+## Delegated next slice (verbatim)
+
+Build58531551af57 delivered to main user18:27UTC. Continue next smallest existing workflow parity gap: track outline RGB editing using current custom numeric/drag controls and existing domain paint/color fields. Keep barebones, no new widget framework features. Preserve exact unlit ground behavior and SimplePaint distinction, undo/redo/cancel, dirty-state and save/reload/track/Drive consistency. Add focused tests and use shared clipping/input/state; continue on-demand rendering. Then deliver immutable verified build with changes/limits promptly and identify next remaining core binding from Parity.md. Never push; references stay read-only. Keep development moving when display/physical checks are blocked, documenting limitations rather than idle.
+
+## Assistant RGB progress (verbatim)
+
+I'll add numeric RGB editing for the selected track outline using the existing custom controls and track history. I'll check cancellation, unsaved-state tracking, save/reload, and Drive consistency, then package the next verified build.
+
+Track surface colors already persist as explicit unlit sRGB values. I'll bind those values to numeric fields and relative sliders. Color-only edits will update materials while retaining the built track geometry, so they can preview during dragging and carry into Drive without another surface build.
+
+The new tests caught a range mismatch: SimplePaint reserves margins at 0 and 1, while unlit RGB must allow exact black and white. I'm correcting the drag path to use the unlit range and keeping the existing SimplePaint ranges unchanged.
+
+All 30 noninteractive checks now pass, including the new RGB transaction test and hidden hardware/WARP runs. They cover exact black/white, fine-drag precision, clean versus dirty state, cancellation, undo/redo, save/reload, and Drive transitions. I'm adding clipped-slider and focus-loss coverage before the final packaging gates.

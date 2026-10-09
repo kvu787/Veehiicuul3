@@ -15,4 +15,7 @@ $launch = @{FilePath=$exe; WorkingDirectory=$PSScriptRoot; PassThru=$true}
 if ($runArguments.Count) { $launch.ArgumentList=$runArguments }
 if ($TestMode -eq 'Hidden') { $launch.WindowStyle='Hidden' }
 $process = Start-Process @launch
-if ($TestMode -ne 'None') { $process.WaitForExit(); if ($process.ExitCode -ne 0) { throw "Test returned $($process.ExitCode)." } }
+if ($TestMode -ne 'None') {
+    if (!$process.WaitForExit(45000)) { Stop-Process -Id $process.Id; throw 'Owned test process exceeded 45 seconds and was stopped.' }
+    if ($process.ExitCode -ne 0) { Write-Error "Test returned $($process.ExitCode)." -ErrorAction Continue; exit $process.ExitCode }
+}

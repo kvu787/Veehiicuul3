@@ -2,6 +2,7 @@ param(
     [string]$Candidate = '',
     [string]$Monitor = '',
     [ValidateSet('None','Hidden','Smoke')][string]$TestMode = 'None',
+    [string]$LogDirectory = '',
     [switch]$Wait
 )
 Set-StrictMode -Version Latest
@@ -30,7 +31,11 @@ if ($TestMode -ne 'None') {
     $runArguments += @('--monitor', ('"' + $Monitor.Replace('"','') + '"'))
 }
 $launch = @{ FilePath=$executable; WorkingDirectory=$directory; PassThru=$true }
+if ($LogDirectory) { $runArguments += @('--log-directory',('"' + $LogDirectory.Replace('"','') + '"')) }
 if ($runArguments.Count) { $launch.ArgumentList=$runArguments }
 if ($TestMode -eq 'Hidden') { $launch.WindowStyle='Hidden' }
 $process = Start-Process @launch
-if ($Wait -or $TestMode -ne 'None') { $process.WaitForExit(); if ($process.ExitCode -ne 0) { throw "Veehiicuul3 returned $($process.ExitCode). See temporary Veehiicuul3/LogOutput diagnostics." } }
+if ($TestMode -ne 'None') {
+    if (!$process.WaitForExit(45000)) { Stop-Process -Id $process.Id; throw 'Owned test process exceeded 45 seconds and was stopped.' }
+} elseif ($Wait) { $process.WaitForExit() }
+if ($Wait -or $TestMode -ne 'None') { if ($process.ExitCode -ne 0) { Write-Error "Veehiicuul3 returned $($process.ExitCode). See Veehiicuul3/LogOutput diagnostics." -ErrorAction Continue; exit $process.ExitCode } }

@@ -1,6 +1,7 @@
 param([switch]$VerifyVisible)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Scripts\BuildDelivery.ps1')
 if ((git -C $PSScriptRoot status --porcelain)) { throw 'Package only clean committed source.' }
 $commit = (git -C $PSScriptRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Cannot identify source commit.' }
@@ -25,7 +26,7 @@ Copy-Item -LiteralPath (Join-Path $release 'Testing\Temporary\LastTest.log') -De
 Copy-Item -LiteralPath (Join-Path $debug 'Testing\Temporary\LastTest.log') -Destination (Join-Path $candidate 'Verification\DebugCTest.log')
 Copy-Item -LiteralPath (Join-Path $release 'HeadlessTargets.txt') -Destination (Join-Path $candidate 'Verification\HeadlessTargets.txt')
 Copy-Item -LiteralPath (Join-Path $release 'Source\SimplePaint\Tests\SimplePaintCopyCheck\HeadlessNestedVerification.txt') -Destination (Join-Path $candidate 'Verification\HeadlessNestedVerification.txt')
-$info = [ordered]@{Project='Veehiicuul3';Commit=$commit;Ready=$false;Status='Candidate';ExecutableSha256=(Get-FileHash -LiteralPath (Join-Path $candidate 'Veehiicuul3.exe') -Algorithm SHA256).Hash;CreatedUtc=[DateTime]::UtcNow.ToString('o');Verification=[ordered]@{ReleaseNoninteractive=$true;DebugNoninteractive=$true;CopiedHardware=$false;CopiedWarp=$false;CopiedVisibleHardware=$false;CopiedVisibleWarp=$false;PhysicalMouse=$false;PhysicalGamepad=$false;ActualEtwDisplayLatency=$false}}
+$info = [ordered]@{Project='Veehiicuul3';Commit=$commit;Ready=$false;Status='Candidate';ExecutableSha256=(Get-FileHash -LiteralPath (Join-Path $candidate 'Veehiicuul3.exe') -Algorithm SHA256).Hash;CreatedUtc=[DateTime]::UtcNow.ToString('o');Verification=[ordered]@{ReleaseNoninteractive=$true;DebugNoninteractive=$true;CopiedHardware=$false;CopiedWarp=$false;CopiedVisibleHardware=$false;CopiedVisibleWarp=$false;ActualSelectorCmd=$false;ActualSnapshotCmd=$false;PhysicalMouse=$false;PhysicalGamepad=$false;ActualEtwDisplayLatency=$false}}
 $manifest = Join-Path $candidate 'BuildInfo.json'
 $info | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifest -Encoding utf8
 $unrelated = Join-Path ([IO.Path]::GetTempPath()) ("Veehiicuul3_CopyProbe_" + [Guid]::NewGuid().ToString('N'))
@@ -54,10 +55,13 @@ foreach ($file in @('TwoPaint.modeler','TwoPaint.h','ExampleCircuit.track','Outl
 Push-Location $unrelated
 try {
     & (Join-Path $PSScriptRoot 'RunLatestBuild.ps1') -Candidate (Split-Path $candidate -Leaf) -TestMode Hidden -Wait
+    if($LASTEXITCODE -ne 0) { throw 'PowerShell selector gate failed.' }
     & (Join-Path $candidate 'Run.ps1') -TestMode Hidden -LogDirectory (Join-Path $candidate 'Verification\SnapshotLauncher')
+    if($LASTEXITCODE -ne 0) { throw 'PowerShell snapshot gate failed.' }
 } finally { Pop-Location }
-$info.Ready = $info.Verification.CopiedVisibleHardware -and $info.Verification.CopiedVisibleWarp
-$info.Status = if ($info.Ready) { 'Verified first runnable milestone' } else { 'Candidate - displayed checks pending' }
+function FinalizeSnapshot([bool]$Ready) {
+$info.Ready = $Ready
+$info.Status = if ($Ready) { 'Verified integration milestone including actual CMD gates' } else { 'Candidate - displayed checks pending' }
 $info | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifest -Encoding utf8
 @"
 # Veehiicuul3 - $($info.Status)
@@ -68,7 +72,7 @@ Executable SHA-256: $($info.ExecutableSha256)
 Run.cmd launches this self-contained copy visibly on Windows' primary monitor.
 Run.cmd -Monitor NE18NZ2 selects that monitor. Displays must be at least 2560x1440 and exactly 100% scaling. The borderless window centers an unscaled 2560x1440 image with black margins.
 
-Release/Debug noninteractive and copied hardware/WARP checks passed. Displayed copied verification: $($info.Ready). Verification/ contains full logs, 2560x1440 application renders and centered presentation evidence. Cursor operations in tests are simulated; no test activation/capture occurs. Physical mouse/gamepad usability and actual ETW display/input latency remain pending. This is a real first migration milestone, not complete parity. See the source README and Documentation/Parity.md.
+Release/Debug noninteractive and copied hardware/WARP checks passed. Displayed copied and actual selector/snapshot CMD gates: $($info.Ready). The actual CMD gates run from an unrelated directory with read-only executable/runtime files, before readiness, freezing and final pointer promotion. Verification/ contains full logs, 2560x1440 application renders and centered presentation evidence. Tests require a presentation-capable execution context; restricted sandbox processes were observed to return DXGI_STATUS_OCCLUDED and fail strict S_OK acceptance. Cursor operations are simulated; no test activation/capture occurs. Physical mouse/gamepad usability and actual ETW display/input latency remain pending. This is an integration milestone, not complete parity. See Documentation/Parity.md.
 
 Examples contains source SlopeCar, two-material cage/export and example track. Shipped files are read-only. Save As outside this snapshot. Development builds and later snapshots do not overwrite it.
 "@ | Set-Content -LiteralPath (Join-Path $candidate 'README.md') -Encoding utf8
@@ -82,11 +86,18 @@ if ($info.Ready) { Move-Item -LiteralPath $candidate -Destination $verified; $di
 $files = Get-ChildItem -LiteralPath $directory -File -Recurse | ForEach-Object { [ordered]@{Path=[IO.Path]::GetRelativePath($directory,$_.FullName);Bytes=$_.Length;Sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash} }
 $files | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $directory 'Files.json') -Encoding utf8
 Get-ChildItem -LiteralPath $directory -File -Recurse | ForEach-Object { $_.IsReadOnly=$true }
-if ($info.Ready) {
-    $pointer = [ordered]@{Directory=(Split-Path $directory -Leaf);Executable='Veehiicuul3.exe';Commit=$commit;ExecutableSha256=$info.ExecutableSha256}
-    $temporaryPointer = Join-Path $root ('LatestReady.' + [Guid]::NewGuid().ToString('N') + '.tmp')
-    $pointer | ConvertTo-Json | Set-Content -LiteralPath $temporaryPointer -Encoding utf8
-    Move-Item -LiteralPath $temporaryPointer -Destination (Join-Path $root 'LatestReady.json') -Force
+return [ordered]@{Directory=(Split-Path $directory -Leaf);Executable='Veehiicuul3.exe';Commit=$commit;ExecutableSha256=$info.ExecutableSha256}
 }
-Write-Output "Snapshot: $directory"
+$displayPassed=$info.Verification.CopiedVisibleHardware -and $info.Verification.CopiedVisibleWarp
+if($displayPassed) {
+    Complete-BuildDelivery -Root $root -LauncherGate {
+        # Exercise the real wrappers with frozen payload attributes. Evidence remains writable until final freeze.
+        foreach($file in $ship+@('Run.cmd','Run.ps1')) { (Get-Item -LiteralPath (Join-Path $candidate $file)).IsReadOnly=$true }
+        Invoke-CmdBuildGate -Script (Join-Path $PSScriptRoot 'RunLatestBuild.cmd') -Arguments @('-Candidate',(Split-Path $candidate -Leaf),'-TestMode','Smoke','-Wait','-LogDirectory',(Join-Path $candidate 'Verification\SelectorCmdHardware')) -WorkingDirectory $unrelated -EvidenceDirectory (Join-Path $candidate 'Verification\SelectorCmdHardware')
+        $info.Verification.ActualSelectorCmd=$true
+        Invoke-CmdBuildGate -Script (Join-Path $candidate 'Run.cmd') -Arguments @('-TestMode','Smoke','-Software','-LogDirectory',(Join-Path $candidate 'Verification\SnapshotCmdWarp')) -WorkingDirectory $unrelated -EvidenceDirectory (Join-Path $candidate 'Verification\SnapshotCmdWarp')
+        $info.Verification.ActualSnapshotCmd=$true
+    } -FinalizeSnapshot { FinalizeSnapshot $true }
+} else { $null=FinalizeSnapshot $false }
+Write-Output "Snapshot: $(if($info.Ready) {$verified} else {$candidate})"
 Write-Output "Ready: $($info.Ready)"

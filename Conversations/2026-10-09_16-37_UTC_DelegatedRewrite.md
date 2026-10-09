@@ -398,3 +398,17 @@ The deletion code now preserves the surviving controls, weights, gate order and 
 The deletion tests passed. Recording selection in history also means a color-only Undo must refresh the overlay when it restores a different selected target. I’ve added that refresh and a regression check that road storage stays unchanged; the full rerun is underway.
 
 All 34 noninteractive checks now pass, including the selection-overlay regression and wrapped-heading correction. I’m committing the deletion domain and UI changes separately, then packaging the clean source with displayed NE18NZ2, Debug and copied-build checks.
+
+## Parent package-stage request (verbatim)
+
+Please report the current test/package stage and whether the non-cardinal full-turn heading fix is implemented, then continue. The latest visible status is the initial deletion contract, so a brief concrete progress update will help distinguish normal implementation from a blocked run.
+
+## Assistant package-stage progress (verbatim)
+
+All 36 committed-source Release checks passed, including displayed hardware/WARP runs on NE18NZ2. Debug and copied-build checks are still running. The seven older snapshots were rehashed unchanged, and both reference repositories remain clean.
+
+The non-cardinal full-turn fix is implemented in local commit `25b8c24`. Its domain and routed tests preserve exact endpoints, history, dirty state and rendering revision while allowing tiny edits. Release passed 36/36; Debug is running, followed by copied-build checks. No blocker is open.
+
+Debug is blocked in the deletion test. I found an insertion expression that briefly advances an iterator past the end before subtracting one—a checked-iterator failure that Release missed. I’m stopping that owned test, correcting the expression, and preventing CRT dialogs in this headless test before rerunning the package.
+
+The corrected deletion test passed in Debug, and the CRT failure probe exited without a dialog. The earlier blocked process had opened a runtime dialog; I stopped only that verified test process, without UI input. Its monitor and focus effect were not recorded, so I won’t claim that incident preserved them.

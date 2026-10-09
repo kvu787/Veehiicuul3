@@ -8,6 +8,7 @@
 #include <sstream>
 #include <cstring>
 #include <numbers>
+#include <thread>
 
 namespace
 {
@@ -83,6 +84,7 @@ void CALLBACK App::CloakChanged(HWINEVENTHOOK,DWORD,HWND window,LONG object,LONG
 void App::VisibilityChanged()
 {
     const bool wasBlocked=schedule_.occluded; schedule_.occluded=visibility_.Blocked();
+    if(wasBlocked!=schedule_.occluded) resetClock_=true;
     if(schedule_.occluded && !wasBlocked) { Abort(); accumulator_=0; }
     if(!schedule_.occluded && wasBlocked) schedule_.dirty=true;
     gamepad_.SetForeground(schedule_.WantsTimer());
@@ -93,8 +95,8 @@ void App::RefreshVisibility()
     {
         visibility_.shown=IsWindowVisible(window_)!=FALSE; schedule_.minimized=IsIconic(window_)!=FALSE;
         DWORD cloaked=0; visibility_.cloaked=SUCCEEDED(DwmGetWindowAttribute(window_,DWMWA_CLOAKED,&cloaked,sizeof(cloaked))) && cloaked!=0;
-        visibility_.desktopAvailable=InputDesktopAvailable();
     }
+    visibility_.desktopAvailable=syntheticVisibility_ ? testDesktopAvailable_ : InputDesktopAvailable();
     VisibilityChanged();
 }
 void App::Interface()
@@ -203,7 +205,7 @@ void App::Actions(const std::vector<Ui::Action>& actions)
 }
 void App::Mode(EditorMode mode)
 {
-    Abort(); editor_.Mode(mode); ui_.scroll=0; ui_.focus=0; held_.fill(false); accumulator_=0;
+    Abort(); editor_.Mode(mode); ui_.scroll=0; ui_.focus=0; held_.fill(false); accumulator_=0; resetClock_=true;
     schedule_.active=mode==EditorMode::Drive && foreground_;
     gamepad_.SetForeground(schedule_.WantsTimer());
     if(mode==EditorMode::Drive && options_.traceSeconds)
@@ -355,6 +357,7 @@ void App::Draw(bool present)
 void App::Tick(double seconds,bool synthetic)
 {
     if(editor_.mode!=EditorMode::Drive) return;
+    if(checkResumeStep_) { Require(seconds==0. && accumulator_==0.,"Continuous production loop integrated suspended time on resume."); checkResumeStep_=false; ++resumeChecks_; }
     const auto before=ticks_;
     accumulator_+=std::clamp(seconds,0.,.0666666667);
     for(unsigned step=0;accumulator_>=1./120 && step<8;++step)
@@ -574,12 +577,20 @@ LRESULT App::Message(UINT message,WPARAM wparam,LPARAM lparam)
     {
     case WM_ERASEBKGND:return 1;
     case WM_PAINT: { PAINTSTRUCT paint{}; BeginPaint(window_,&paint); EndPaint(window_,&paint); schedule_.dirty=true; return 0; }
-    case WM_SIZE:schedule_.minimized=wparam==SIZE_MINIMIZED; if(schedule_.minimized) { Abort(); accumulator_=0; } gamepad_.SetForeground(schedule_.WantsTimer()); schedule_.dirty=true; return 0;
+    case WM_SIZE:if(schedule_.minimized!=(wparam==SIZE_MINIMIZED)) resetClock_=true; schedule_.minimized=wparam==SIZE_MINIMIZED; if(schedule_.minimized) { Abort(); accumulator_=0; } gamepad_.SetForeground(schedule_.WantsTimer()); schedule_.dirty=true; return 0;
     case WM_SHOWWINDOW:visibility_.shown=wparam!=0; RefreshVisibility(); return 0;
     case Renderer::VisibilityMessage:RefreshVisibility(); return 0;
     case WM_WTSSESSION_CHANGE:
-        if(wparam==WTS_SESSION_LOCK || wparam==WTS_CONSOLE_DISCONNECT || wparam==WTS_REMOTE_DISCONNECT) visibility_.sessionAvailable=false;
-        else if(wparam==WTS_SESSION_UNLOCK || wparam==WTS_CONSOLE_CONNECT || wparam==WTS_REMOTE_CONNECT) visibility_.sessionAvailable=true;
+        if(wparam==WTS_SESSION_LOCK || wparam==WTS_CONSOLE_DISCONNECT || wparam==WTS_REMOTE_DISCONNECT)
+        {
+            visibility_.sessionAvailable=false;
+            if(continuousProbe_) { pausedTicks_=ticks_; pausedPresents_=renderer_.Presents(); visibility_.desktopAvailable=false; }
+        }
+        else if(wparam==WTS_SESSION_UNLOCK || wparam==WTS_CONSOLE_CONNECT || wparam==WTS_REMOTE_CONNECT || wparam==WTS_SESSION_DESKTOP_READY)
+        {
+            visibility_.sessionAvailable=true; RefreshVisibility();
+            if(continuousProbe_ && wparam==WTS_SESSION_UNLOCK) { Require(ticks_==pausedTicks_ && renderer_.Presents()==pausedPresents_,"Continuous Pump stepped or rendered during suspension."); checkResumeStep_=true; }
+        }
         VisibilityChanged(); return 0;
     case WM_POWERBROADCAST:
         if(wparam==PBT_POWERSETTINGCHANGE && lparam)
@@ -590,8 +601,8 @@ LRESULT App::Message(UINT message,WPARAM wparam,LPARAM lparam)
         else if(wparam==PBT_APMSUSPEND) { visibility_.suspended=true; VisibilityChanged(); }
         else if(wparam==PBT_APMRESUMEAUTOMATIC || wparam==PBT_APMRESUMESUSPEND) { visibility_.suspended=false; RefreshVisibility(); }
         return TRUE;
-    case WM_ACTIVATE: foreground_=LOWORD(wparam)!=WA_INACTIVE; schedule_.active=foreground_ && editor_.mode==EditorMode::Drive; RefreshVisibility(); if(!foreground_) Abort(); return 0;
-    case WM_KILLFOCUS:foreground_=false; schedule_.active=false; gamepad_.SetForeground(false); Abort(); return 0;
+    case WM_ACTIVATE: foreground_=LOWORD(wparam)!=WA_INACTIVE; if(schedule_.active!=(foreground_ && editor_.mode==EditorMode::Drive)) { resetClock_=true; accumulator_=0; } schedule_.active=foreground_ && editor_.mode==EditorMode::Drive; RefreshVisibility(); if(!foreground_) Abort(); return 0;
+    case WM_KILLFOCUS:foreground_=false; schedule_.active=false; resetClock_=true; accumulator_=0; gamepad_.SetForeground(false); Abort(); return 0;
     case WM_CAPTURECHANGED:if(reinterpret_cast<HWND>(lparam)!=window_ && (ui_.capture || slider_ || modelDrag_ || trackDrag_ || orbit_ || pan_)) Abort(); return 0;
     case WM_CANCELMODE:Abort();return 0;
     case WM_INPUT:RawMouse(reinterpret_cast<HRAWINPUT>(lparam));return DefWindowProcW(window_,message,wparam,lparam);
@@ -642,8 +653,8 @@ void App::Pump(std::optional<Clock::time_point> deadline)
         const auto now=Clock::now(); if(deadline && now>=*deadline) break;
         const auto remaining=deadline ? static_cast<DWORD>(std::max(1.,std::ceil(std::chrono::duration<double,std::milli>(*deadline-now).count()))) : INFINITE;
         const bool active=schedule_.WantsTimer();
-        if(active) Tick(ticking ? std::chrono::duration<double>(now-previous).count() : 0.);
-        previous=now; ticking=active;
+        if(active) Tick(ticking && !resetClock_ ? std::chrono::duration<double>(now-previous).count() : 0.);
+        previous=now; ticking=active; resetClock_=false;
         if(schedule_.WantsFrame())
         {
             HANDLE ready=renderer_.FrameReady(); const auto result=MsgWaitForMultipleObjectsEx(1,&ready,remaining,QS_ALLINPUT,MWMO_INPUTAVAILABLE);
@@ -759,6 +770,7 @@ int App::Tests()
     Require(idleWakes<=8,"Static production scheduler woke continuously while idle.");
     char commit[128]{}; WideCharToMultiByte(CP_UTF8,0,VEEHIICUUL3_COMMIT,-1,commit,sizeof(commit),nullptr,nullptr);
     std::ofstream out(options_.session/"Verification.txt"); out<<"Veehiicuul3 "<<commit<<"\nAdapter: "<<renderer_.AdapterName()<<"\nHidden: "<<options_.hidden<<"\nPresents: "<<renderer_.Presents()<<"\nIdle seconds: 3\nIdle new presents: "<<renderer_.Presents()-startPresents<<"\nIdle wakes: "<<idleWakes<<"\nIdle CPU ms: "<<double(time(kernelAfter)+time(userAfter)-time(kernelBefore)-time(userBefore))/10000<<"\nDX12 warnings/errors: "<<renderer_.DebugErrors()<<"\nDebug layer enabled: "<<renderer_.HasDebugLayer()<<"\nTest acquired foreground/focus/capture: false\nObserved foreground/focus/capture stable: "<<foregroundStable<<"\nObserved user cursor stable: "<<cursorStable<<"\nCursor operations: simulated only\nProduction Run/Pump path: idle and driving suspension/resume passed\nVisibility signals: synthetic show/minimize/session/display-power/cloak/suspend; OS registrations exercised, no OS state changed\nTraced Present probe branch: "<<testTracedPresents_<<" accepted submissions (no physical ETW association claim)\nPhysical input and actual ETW display association: pending\n";
+    out<<"Cached unavailable input desktop: unlock/connect/desktop-ready refresh passed\nContinuous single-Pump resume checks: "<<resumeChecks_<<" (spaced and batched notifications, ordinary and instrumented Present)\n";
     if(options_.smoke && !InputDesktopAvailable()) { std::ofstream(options_.session/"Skipped.txt")<<"Input desktop became unavailable during displayed checks. Visual verification pending."; return 77; }
     return 0;
 }
@@ -796,6 +808,26 @@ void App::TestProductionLoop()
         }
     }
     Require(testTracedPresents_>0,"Production scheduler did not exercise traced Present branch.");
+    for(WPARAM event:{WPARAM{WTS_SESSION_UNLOCK},WPARAM{WTS_CONSOLE_CONNECT},WPARAM{WTS_REMOTE_CONNECT},WPARAM{WTS_SESSION_DESKTOP_READY}})
+    {
+        visibility_.desktopAvailable=false; visibility_.sessionAvailable=false; VisibilityChanged();
+        Message(WM_WTSSESSION_CHANGE,event,0); Require(visibility_.desktopAvailable && !visibility_.Blocked(),"Reconnect/desktop-ready left cached input desktop unavailable.");
+    }
+    testDesktopAvailable_=false; Message(WM_WTSSESSION_CHANGE,WTS_SESSION_UNLOCK,0); Require(visibility_.Blocked(),"Unlock assumed an unavailable input desktop was ready.");
+    testDesktopAvailable_=true; Message(WM_WTSSESSION_CHANGE,WTS_SESSION_DESKTOP_READY,0); Require(!visibility_.Blocked(),"Desktop-ready failed to refresh input desktop availability.");
+    for(bool traced:{false,true}) for(bool batched:{false,true})
+    {
+        testPresentProbe_=traced; continuousProbe_=true; const auto checks=resumeChecks_;
+        // A temporary test sender posts only to our window; no OS lock/unlock.
+        std::jthread notifications([window=window_,batched] {
+            Sleep(50); PostMessageW(window,WM_WTSSESSION_CHANGE,WTS_SESSION_LOCK,0);
+            if(!batched) Sleep(200);
+            PostMessageW(window,WM_WTSSESSION_CHANGE,WTS_SESSION_UNLOCK,0);
+            PostMessageW(window,WM_WTSSESSION_CHANGE,WTS_SESSION_DESKTOP_READY,0);
+        });
+        held_['D']=true; Pump(Clock::now()+std::chrono::milliseconds(450)); notifications.join();
+        Require(resumeChecks_==checks+1 && !checkResumeStep_,"Continuous single-Pump resume observation did not run."); continuousProbe_=false;
+    }
     testPresentProbe_=false; Mode(EditorMode::ModelBuilder); foreground_=false; schedule_.active=false;
     syntheticVisibility_=false; RefreshVisibility(); Change();
 }

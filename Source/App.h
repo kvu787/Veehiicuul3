@@ -74,6 +74,8 @@ private:
     bool running_=true,meshDirty_=true,overlayDirty_=true,orbit_=false,pan_=false,modelDrag_=false,trackDrag_=false;
     bool modifiedModel_=false,modifiedTrack_=false,foreground_=false;
     bool sessionRegistered_=false,syntheticVisibility_=false,testPresentProbe_=false;
+    bool resetClock_=true,testDesktopAvailable_=true,continuousProbe_=false,checkResumeStep_=false;
+    uint64_t pausedTicks_=0,pausedPresents_=0,resumeChecks_=0;
     HPOWERNOTIFY displayPowerNotification_=nullptr;
     HWINEVENTHOOK cloakHook_=nullptr;
     int menu_=0,slider_=0;

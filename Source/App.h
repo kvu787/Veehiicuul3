@@ -57,6 +57,7 @@ private:
     void TestModeScroll();
     void TestUiTransactions();
     void TestProductionLoop();
+    void TestWindowState(const char* phase);
     void TestWorkflow();
     int Tests();
     Camera& ViewCamera() { return editor_.ViewCamera(); }

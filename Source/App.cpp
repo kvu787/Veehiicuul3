@@ -516,7 +516,7 @@ void App::Draw(bool present)
     if(probePointer && testPresentProbe_)
     {
         ++testTracedPresents_; if(frame.accepted) ++testTracedAccepted_;
-        else std::ofstream(options_.session/"PresentStatus.txt",std::ios::app)<<"Instrumented Present HRESULT 0x"<<std::hex<<static_cast<unsigned long>(renderer_.LastPresentResult())<<"; submission acceptance remains false.\n";
+        else { std::ofstream(options_.session/"PresentStatus.txt",std::ios::app)<<"Instrumented Present HRESULT 0x"<<std::hex<<static_cast<unsigned long>(renderer_.LastPresentResult())<<"; submission acceptance remains false.\n"; TestWindowState("Unaccepted instrumented Present"); }
         Require(frame.accepted,"Instrumented Present was not S_OK; exact HRESULT retained in PresentStatus.txt. Assertion remains strict pending diagnosis.");
     }
     schedule_.dirty=false;
@@ -1425,11 +1425,47 @@ void App::TestUiTransactions()
     }
     ui_.scroll=0; modelPath_.clear(); Change();
 }
+void App::TestWindowState(const char* phase)
+{
+    STARTUPINFOW startup{}; startup.cb=sizeof(startup); GetStartupInfoW(&startup);
+    WINDOWPLACEMENT placement{}; placement.length=sizeof(placement); GetWindowPlacement(window_,&placement);
+    RECT window{},client{}; GetWindowRect(window_,&window); GetClientRect(window_,&client);
+    DWORD cloak=0; const auto cloakResult=DwmGetWindowAttribute(window_,DWMWA_CLOAKED,&cloak,sizeof(cloak));
+    BOOL receivesInput=FALSE; DWORD required=0;
+    const auto desktopQuery=GetUserObjectInformationW(GetThreadDesktop(GetCurrentThreadId()),UOI_IO,&receivesInput,sizeof(receivesInput),&required);
+    BOOL inJob=FALSE; IsProcessInJob(GetCurrentProcess(),nullptr,&inJob);
+    JOBOBJECT_BASIC_UI_RESTRICTIONS job{}; const auto jobQuery=QueryInformationJobObject(nullptr,JobObjectBasicUIRestrictions,&job,sizeof(job),nullptr);
+    DWORD integrity=0,tokenError=0; HANDLE token=nullptr;
+    if(OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&token))
+    {
+        alignas(TOKEN_MANDATORY_LABEL) std::array<std::byte,1024> storage{}; DWORD bytes=0;
+        if(GetTokenInformation(token,TokenIntegrityLevel,storage.data(),static_cast<DWORD>(storage.size()),&bytes))
+        {
+            const auto* label=reinterpret_cast<const TOKEN_MANDATORY_LABEL*>(storage.data());
+            integrity=*GetSidSubAuthority(label->Label.Sid,*GetSidSubAuthorityCount(label->Label.Sid)-1);
+        }
+        else tokenError=GetLastError();
+        CloseHandle(token);
+    }
+    else tokenError=GetLastError();
+    std::ofstream out(options_.session/"WindowState.txt",std::ios::app);
+    out<<phase<<" PID "<<GetCurrentProcessId()<<" visible "<<IsWindowVisible(window_)<<" iconic "<<IsIconic(window_)
+       <<" cloak HRESULT "<<cloakResult<<" cloak "<<cloak<<" own foreground "<<(GetForegroundWindow()==window_)
+       <<" show command "<<placement.showCmd<<" startup flags "<<startup.dwFlags<<" startup show "<<startup.wShowWindow
+       <<" window "<<window.left<<","<<window.top<<","<<window.right<<","<<window.bottom
+       <<" client "<<client.right<<","<<client.bottom<<" desktop available "<<InputDesktopAvailable()
+       <<" synthetic "<<syntheticVisibility_<<" display on "<<visibility_.displayOn<<" session available "<<visibility_.sessionAvailable
+       <<" own desktop query "<<desktopQuery<<" own desktop receives input "<<receivesInput<<" foreground exists "<<(GetForegroundWindow()!=nullptr)
+       <<" in job "<<inJob<<" job query "<<jobQuery<<" UI restrictions "<<job.UIRestrictionsClass<<" token integrity "<<integrity<<" token error "<<tokenError
+       <<" presents "<<renderer_.Presents()<<" last HRESULT 0x"<<std::hex<<static_cast<unsigned long>(renderer_.LastPresentResult())<<std::dec
+       <<" cwd "<<std::filesystem::current_path().string()<<" log "<<options_.session.string()<<"\n";
+}
 int App::Tests()
 {
     if(options_.smoke && !InputDesktopAvailable()) { std::ofstream(options_.session/"Skipped.txt")<<"Input desktop unavailable before displayed checks."; return 77; }
     const auto foreground=GetForegroundWindow(),focus=GetFocus(),capture=GetCapture(); POINT cursorBefore{}; GetCursorPos(&cursorBefore);
     if(options_.smoke) { ShowWindow(window_,SW_SHOWNOACTIVATE); SetWindowPos(window_,HWND_TOP,presentation_.originX,presentation_.originY,presentation_.width,presentation_.height,SWP_NOACTIVATE); }
+    TestWindowState("Before workflow");
     TestWorkflow(); TestProductionLoop();
     // The same Pump used by Run is observed with a finite test deadline.
     MSG message{}; while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
@@ -1457,6 +1493,7 @@ int App::Tests()
 }
 void App::TestProductionLoop()
 {
+    TestWindowState("Before production-loop fixtures");
     syntheticVisibility_=true; visibility_=Ui::Visibility{}; visibility_.shown=true; schedule_.minimized=false; VisibilityChanged();
     foreground_=true; Mode(EditorMode::TrackBuilder); Command(ExampleTrack); Mode(EditorMode::Drive);
     struct PowerSignal { GUID setting; DWORD length,value; } power{GUID_CONSOLE_DISPLAY_STATE,sizeof(DWORD),0};

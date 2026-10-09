@@ -432,3 +432,21 @@ I informed the user of the Debug runtime dialog incident and the unknown monitor
 ## Assistant entry-point extension progress (verbatim)
 
 The snapshot and rejected-run evidence are preserved. I'll extend the CRT reporting policy to every automated headless entry point, including the application's hidden test mode, then rerun the failure probes and package gates. The policy will stay process-local.
+
+## Assistant shared policy and V2 camera inspection (verbatim)
+
+The audit found unguarded console tests, SimplePaint's nested copy tests, and hidden/smoke application startup. I'll give them a shared reporting policy and verify each owned entry point with a bounded failure probe. SimplePaint's module files will stay unchanged; the nested test harness will supply the guard.
+
+## Parent delivery and camera-follow delegation (verbatim)
+
+The corrected deletion snapshot was announced based on the completed launcher/hash checks. Finish the delivery record and confirm the headless entry-point coverage requested above, then continue existing camera-follow parity with V2 using minimal controls. Verify the actual behavior first, preserve the 2D game domain and on-demand editor rendering, and test transitions among editor, Drive, pause/resume and camera modes without unwanted jumps or dirtying authored assets for view-only settings. Keep scope bounded, references read-only, visible checks NE18NZ2 only and commits local. Deliver a verified immutable snapshot with explicit remaining manual limits.
+
+## Assistant headless and camera implementation progress (verbatim)
+
+The shared guard compiled after I corrected a CRT hook constant. Debug is running; the deletion failure probe and hidden hardware workflow passed. V2's follow setting defaults off, centers the car during Drive, preserves orbit/zoom, and restores the editor camera on exit. I'll carry that behavior forward with one existing-style button.
+
+Debug passed 73/73. Controlled failures also exited with stderr evidence in all four fresh SimplePaint copies. The guard now covers 28 owned console entries, both application test modes, checked iterators, narrow/wide reports, abort, terminate and worker-thread invalid parameters. I'll commit this separately, then implement camera-follow.
+
+Camera-follow and free-view routing are implemented. Drive now has a separate camera, so orbit, pan, follow and framing preserve the stored editor views. Tests are running for repeated Drive selection, reset, suspension/resume, clean authored state and restoration on exit.
+
+The camera domain and hidden hardware/WARP workflows passed in Debug. I changed the probe checker before that run's binaries were rebuilt, which caused marker-mismatch failures even though the processes exited correctly. I'm preserving that log and will verify the stricter checker against rebuilt, committed source during packaging.

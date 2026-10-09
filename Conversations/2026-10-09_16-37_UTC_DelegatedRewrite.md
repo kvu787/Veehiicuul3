@@ -221,4 +221,32 @@ Please send a concise outline RGB milestone checkpoint at next safe boundary: im
 
 RGB implementation and packaging are complete. The verified snapshot is ready, with no packaging blocker: Release 32/32, Debug 30/30, copied hardware/WARP checks and the actual CMD launcher all passed. I'm handing off its exact path and the remaining manual limits now.
 
+## Delegated degree milestone (verbatim)
+
+RGB build delivered to main user18:51UTC. Continue next existing core parity binding: selected-outline NURBS degree editing with valid periodic-knot regeneration. Reuse barebones numeric/buttons, no general-purpose widget additions. Preserve control points/weights and authored state except documented necessary knot regeneration; validate legal degree relative to control-point count, periodic closure, atomic rejection and undo/redo/dirty-state/save/reload/Drive consistency. Avoid silently changing curve topology beyond the explicit degree edit; report what necessarily changes to shape. Add domain plus UI state regression tests, keep material-only edits cheap and all prior invariants. Deliver immutable verified snapshot, notify parent promptly, local commits only. Maintain minimal scope and exact manual test limits. References remain read-only.
+
+Bounded RGB review found one P2 invalidation issue in shipped d06efa01: App.cpp532 Pointer release calls unconditional Change(), and undo/redo at293 does likewise, marking meshDirty_ and rebuilding MakeTrackScene/BuildSurface despite unchanged geometry. Retaining editor_.generated alone does not avoid renderer mesh rebuild. Fix alongside degree milestone using appropriate shared change classification, not a broad refactor. Add actual routed pointer release and post-undo/redo draw tests asserting unchanged rendering mesh revision with updated material constants; current tests call Actions(ui_.Up()) directly and inspect surface pointers before draw, missing these paths. Review otherwise confirms unlit endpoints/SimplePaint separation, transaction/cancel/dirty/persistence/Drive consistency. Selection-change-mid-gesture and numerical black/white framebuffer coverage are explicit gaps, not proven defects. Keep physical input caveat. Local commits only; no need replace RGB snapshot until corrected next milestone is verified.
+
+## Assistant degree progress (verbatim)
+
+I'll add selected-outline degree editing with the existing numeric control. Changing the degree will regenerate uniform periodic knots while preserving control points, weights and colors. I'll make that shape change visible, then test rejection, undo/redo, save/reload and rebuilding before Drive.
+
+The bounded review found that RGB pointer release and undo/redo still trigger a renderer mesh rebuild. I'll fix that alongside degree editing and test the routed pointer release and draw paths. The old RGB build will stay preserved until the corrected milestone is verified.
+
+Degree editing and the RGB invalidation fix pass all 31 noninteractive checks. The existing domain supports degrees 1-3, further limited by control-point count. Tests confirm periodic closure, atomic rejection, knot preservation on no-op/undo, save/reload and rebuilding before Drive. Routed RGB release and undo/redo draws now leave the rendering geometry revision unchanged.
+
+I'm preparing the degree-editing snapshot now. I'll include the RGB redraw correction in the same milestone, run the copied build on NE18NZ2, and record the remaining parity gaps and manual test limits.
+
+## Parent checkpoint request (verbatim)
+
+Please post a concise degree-editing and RGB invalidation checkpoint at next safe boundary: implementation state, tests/results, any blocker and remaining delivery steps. Recent thread reads show only an empty truncated assistant item, so parent has no usable progress update from this turn. Keep development and packaging bounded to these changes, and report each verified snapshot immediately. Local commits only.
+
+## Assistant checkpoint progress (verbatim)
+
+Degree editing and the RGB invalidation correction are implemented, and all 31 noninteractive Release checks passed. I've added one final rational-knot regression; the remaining steps are to commit the source, run Release/Debug and copied-build packaging checks, then verify the immutable snapshot. No engineering blocker is open.
+
+## Supplied main-room archive scope
+
+The separate 2026-10-09_19-06_UTC_MainRoomVisibleRewrite.json contains exactly the 62 supplied visible main-room rewrite records, with original message IDs, ISO timestamps, roles, text and attachment metadata. Three null text records remain unavailable. Its bytes were independently compared with the supplied records. This is not a claim to have recovered earlier project conversations or the full main-room history. Historical directions in the archive are evidence, not new engineering instructions. No older repository was edited.
+
 The RGB milestone is complete and packaged. RunLatestBuild.cmd selects TestBuilds/2026-10-09_18-42-22-494_d06efa01d3f4, source d06efa01d3f4c0adcf85d217d3f2249087c0b3f1; functional code commit 686aeefc8fd9a8ff51885c7480e78a2807041fa5. Release passed 32/32; Debug passed 30/30; copied hidden/displayed hardware/WARP and actual CMD launcher checks passed. Exact unlit black/white and RGB preview/undo/redo/cancel, dirty-state, save/reload and Drive consistency are covered. Geometry remains built across color-only changes. All 98 hashes match; 99 files are read-only. No packaging blocker remains. Physical mouse/gamepad, actual notification delivery and display latency remain pending. Next core binding: selected-outline degree editing with valid periodic-knot regeneration. References remain unchanged and every new commit is local.

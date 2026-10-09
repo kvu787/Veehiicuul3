@@ -3,12 +3,14 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // This module has no renderer, window, mesh, or spatial 3D dependencies.
 namespace Racing2D
 {
 inline constexpr unsigned MaximumNurbsDegree=3;
+inline constexpr size_t MaximumKnotCount=71,MaximumKnotTextLength=2048;
 struct Point
 {
     double x=0,y=0;
@@ -48,6 +50,9 @@ struct GeneratedTrack
 };
 void MakeUniformKnots(NurbsOutline& curve);
 void ValidateCurve(const NurbsOutline& curve);
+std::vector<double> ParseKnots(std::string_view text);
+std::string FormatKnots(const std::vector<double>& knots);
+void ValidatePeriodicKnots(const NurbsOutline& curve);
 Point Evaluate(const NurbsOutline& curve,double parameter);
 std::vector<Point> Tessellate(const NurbsOutline& curve,unsigned samplesPerSpan=12);
 bool Contains(const std::vector<Point>& polygon,Point point);

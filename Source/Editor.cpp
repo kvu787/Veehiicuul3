@@ -51,13 +51,13 @@ void Editor::ModelEdit(const std::function<void()>& operation)
     if(modelUndo_.size()>=128) modelUndo_.erase(modelUndo_.begin());
     modelUndo_.push_back(std::move(previous)); modelRedo_.clear();
 }
-void Editor::TrackEdit(const std::function<void()>& operation)
+void Editor::TrackEdit(const std::function<void()>& operation,bool preservesGeometry)
 {
     auto previous=track;
     try { operation(); ValidateTrackProject(track,false); }
     catch(...) { track=std::move(previous); throw; }
     if(trackUndo_.size()>=128) trackUndo_.erase(trackUndo_.begin());
-    trackUndo_.push_back({std::move(previous),false}); trackRedo_.clear(); generated.reset();
+    trackUndo_.push_back({std::move(previous),preservesGeometry}); trackRedo_.clear(); if(!preservesGeometry) generated.reset();
 }
 bool Editor::CanUndo(bool redo) const { return mode==EditorMode::ModelBuilder ? !(redo ? modelRedo_ : modelUndo_).empty() : mode==EditorMode::TrackBuilder && !(redo ? trackRedo_ : trackUndo_).empty(); }
 bool Editor::Undo(bool redo)
@@ -71,9 +71,9 @@ bool Editor::Undo(bool redo)
     else
     {
         auto& from=redo ? trackRedo_ : trackUndo_; auto& to=redo ? trackUndo_ : trackRedo_;
-        const bool sameGeometry=SameTrackGeometry(track.track,from.back().project.track),materialOnly=from.back().materialOnly;
-        to.push_back({track,materialOnly}); track=std::move(from.back().project); from.pop_back(); if(!sameGeometry) generated.reset();
-        return !materialOnly;
+        const bool sameGeometry=SameTrackGeometry(track.track,from.back().project.track),preservesGeometry=from.back().preservesGeometry;
+        to.push_back({track,preservesGeometry}); track=std::move(from.back().project); from.pop_back(); if(!preservesGeometry && !sameGeometry) generated.reset();
+        return !preservesGeometry;
     }
 }
 void Editor::AddShape(int kind)
@@ -143,6 +143,17 @@ bool Editor::SetOutlineDegree(double value)
     (void)Racing2D::Tessellate(next); // Validate the periodic seam before touching authored state/history.
     TrackEdit([&] { track.track.outlines[static_cast<size_t>(outline)]=std::move(next); });
     return true;
+}
+Editor::KnotEdit Editor::SetOutlineKnots(std::string_view text)
+{
+    if(colorStart_) throw std::invalid_argument("Finish or cancel the outline color gesture before editing knots.");
+    if(mode!=EditorMode::TrackBuilder || outline<0 || static_cast<size_t>(outline)>=track.track.outlines.size()) throw std::invalid_argument("Select a track outline to edit its knots.");
+    const auto index=static_cast<size_t>(outline); auto next=track.track.outlines[index]; next.knots=Racing2D::ParseKnots(text);
+    Racing2D::ValidatePeriodicKnots(next); const auto boundary=Racing2D::Tessellate(next);
+    if(next.knots==track.track.outlines[index].knots) return KnotEdit::Unchanged;
+    const bool sameBoundary=generated && index<generated->boundaries.size() && boundary==generated->boundaries[index];
+    TrackEdit([&] { track.track.outlines[index]=std::move(next); },sameBoundary);
+    return sameBoundary ? KnotEdit::SameBoundary : KnotEdit::ChangedBoundary;
 }
 void Editor::Mode(EditorMode next)
 {

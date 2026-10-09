@@ -1,7 +1,12 @@
 #include "Racing2D.h"
 #include <algorithm>
+#include <charconv>
+#include <cctype>
+#include <iomanip>
 #include <limits>
+#include <locale>
 #include <numbers>
+#include <sstream>
 #include <stdexcept>
 #include <tuple>
 
@@ -90,6 +95,43 @@ void ValidateCurve(const NurbsOutline& curve)
     for(size_t i=0;i<curve.knots.size();++i) Require(std::isfinite(curve.knots[i]) && std::abs(curve.knots[i])<=100000 && (i==0 || curve.knots[i]>=curve.knots[i-1]),"Knots must be finite, bounded and nondecreasing.");
     Require(curve.knots[curve.controls.size()+curve.degree]-curve.knots[curve.degree]>Epsilon,"The knot domain has no length.");
     for(auto color:curve.colorSrgb) Require(std::isfinite(color) && color>=0 && color<=1,"Ground colors must be in [0,1].");
+}
+std::vector<double> ParseKnots(std::string_view text)
+{
+    Require(!text.empty() && text.size()<=MaximumKnotTextLength,"Knot text must contain 1 to 2048 characters.");
+    std::vector<double> result; size_t cursor=0;
+    auto space=[&] { while(cursor<text.size() && std::isspace(static_cast<unsigned char>(text[cursor]))) ++cursor; };
+    space(); Require(cursor<text.size(),"Enter the complete knot vector, separated by spaces or commas.");
+    while(cursor<text.size())
+    {
+        const auto first=cursor;
+        while(cursor<text.size() && text[cursor]!=',' && !std::isspace(static_cast<unsigned char>(text[cursor]))) ++cursor;
+        auto token=text.substr(first,cursor-first);
+        if(!token.empty() && token.front()=='+') { token.remove_prefix(1); Require(!token.empty() && token.front()!='+' && token.front()!='-',"Invalid knot sign."); }
+        Require(!token.empty(),"Empty knot entry; enter a number between commas.");
+        double value=0; const auto parsed=std::from_chars(token.data(),token.data()+token.size(),value);
+        Require(parsed.ec==std::errc{} && parsed.ptr==token.data()+token.size() && std::isfinite(value),"Every knot must be a finite decimal or scientific number.");
+        Require(result.size()<MaximumKnotCount,"A knot vector can contain at most 71 values."); result.push_back(value);
+        space(); if(cursor<text.size() && text[cursor]==',') { ++cursor; space(); Require(cursor<text.size() && text[cursor]!=',',"Empty knot entry; trailing or doubled commas are invalid."); }
+    }
+    return result;
+}
+std::string FormatKnots(const std::vector<double>& knots)
+{
+    std::ostringstream stream; stream.imbue(std::locale::classic()); stream<<std::setprecision(std::numeric_limits<double>::max_digits10);
+    for(size_t i=0;i<knots.size();++i) { if(i) stream<<' '; stream<<knots[i]; }
+    return stream.str();
+}
+void ValidatePeriodicKnots(const NurbsOutline& curve)
+{
+    ValidateCurve(curve);
+    const size_t n=curve.controls.size(),p=curve.degree; const auto period=curve.knots[n+p]-curve.knots[p];
+    for(size_t i=0;i<=2*p;++i)
+    {
+        const auto a=curve.knots[i],b=curve.knots[i+n];
+        const auto tolerance=8*std::numeric_limits<double>::epsilon()*std::max({1.,std::abs(a),std::abs(b),std::abs(period)});
+        Require(std::abs((b-a)-period)<=tolerance,"Periodic extensions must repeat: knot[i+controlCount] = knot[i] + period.");
+    }
 }
 Point Evaluate(const NurbsOutline& curve,double parameter)
 {

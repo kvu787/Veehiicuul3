@@ -49,6 +49,10 @@ public:
     enum class KnotEdit { Unchanged,SameBoundary,ChangedBoundary };
     KnotEdit SetOutlineKnots(std::string_view text);
     bool GateSelected() const;
+    bool CanDeletePoint() const;
+    void DeletePoint();
+    bool CanDeleteGate() const;
+    void DeleteGate();
     Racing2D::Gate SelectedGate() const;
     bool SetGatePlacement(Racing2D::GatePlacement placement);
     bool CanDrive() const;
@@ -61,9 +65,14 @@ public:
     void Frame(bool selected=false);
 private:
     std::vector<ModelState> modelUndo_,modelRedo_;
-    struct TrackHistory { TrackProject project; bool preservesGeometry=false; };
+    struct TrackSelection { int outline,point,decoration,gate; };
+    TrackSelection TrackSelectionNow() const { return {outline,point,decoration,gate}; }
+    void RestoreTrackSelection(TrackSelection value);
+    void ClampTrackSelection();
+    struct TrackHistory { TrackProject project; bool preservesGeometry=false; TrackSelection selection; };
     std::vector<TrackHistory> trackUndo_,trackRedo_;
     std::optional<ModelState> paintStart_;
     std::optional<TrackProject> colorStart_;
+    TrackSelection colorSelection_{0,0,-1,-1};
     int colorOutline_=-1;
 };

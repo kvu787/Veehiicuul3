@@ -53,11 +53,20 @@ void Editor::ModelEdit(const std::function<void()>& operation)
 }
 void Editor::TrackEdit(const std::function<void()>& operation,bool preservesGeometry,bool preservesBoundaries)
 {
-    auto previous=track;
+    auto previous=track; const auto selection=TrackSelectionNow();
     try { operation(); ValidateTrackProject(track,false); }
-    catch(...) { track=std::move(previous); throw; }
+    catch(...) { track=std::move(previous); RestoreTrackSelection(selection); throw; }
+    ClampTrackSelection();
     if(trackUndo_.size()>=128) trackUndo_.erase(trackUndo_.begin());
-    trackUndo_.push_back({std::move(previous),preservesGeometry}); trackRedo_.clear(); if(!preservesGeometry && !preservesBoundaries) generated.reset();
+    trackUndo_.push_back({std::move(previous),preservesGeometry,selection}); trackRedo_.clear(); if(!preservesGeometry && !preservesBoundaries) generated.reset();
+}
+void Editor::RestoreTrackSelection(TrackSelection value) { outline=value.outline; point=value.point; decoration=value.decoration; gate=value.gate; }
+void Editor::ClampTrackSelection()
+{
+    if(track.track.outlines.empty()) outline=point=-1;
+    else { outline=std::clamp(outline,0,static_cast<int>(track.track.outlines.size())-1); point=std::clamp(point,0,static_cast<int>(track.track.outlines[static_cast<size_t>(outline)].controls.size())-1); }
+    decoration=track.decorations.empty() ? -1 : std::clamp(decoration,0,static_cast<int>(track.decorations.size())-1);
+    if(!GateSelected()) gate=track.track.hasFinish ? 0 : track.track.checkpoints.empty() ? -1 : std::clamp(gate,1,static_cast<int>(track.track.checkpoints.size()));
 }
 bool Editor::CanUndo(bool redo) const { return mode==EditorMode::ModelBuilder ? !(redo ? modelRedo_ : modelUndo_).empty() : mode==EditorMode::TrackBuilder && !(redo ? trackRedo_ : trackUndo_).empty(); }
 bool Editor::Undo(bool redo)
@@ -72,7 +81,8 @@ bool Editor::Undo(bool redo)
     {
         auto& from=redo ? trackRedo_ : trackUndo_; auto& to=redo ? trackUndo_ : trackRedo_;
         const bool sameGeometry=SameTrackGeometry(track.track,from.back().project.track),preservesGeometry=from.back().preservesGeometry;
-        to.push_back({track,preservesGeometry}); track=std::move(from.back().project); from.pop_back(); if(!preservesGeometry && !sameGeometry) generated.reset();
+        to.push_back({track,preservesGeometry,TrackSelectionNow()}); const auto selection=from.back().selection;
+        track=std::move(from.back().project); from.pop_back(); RestoreTrackSelection(selection); ClampTrackSelection(); if(!preservesGeometry && !sameGeometry) generated.reset();
         return !preservesGeometry;
     }
 }
@@ -116,7 +126,7 @@ bool Editor::EndPaint(bool cancel)
 void Editor::BeginOutlineColor()
 {
     if(mode!=EditorMode::TrackBuilder || outline<0 || static_cast<size_t>(outline)>=track.track.outlines.size()) throw std::invalid_argument("Select a track outline to edit its color.");
-    if(!colorStart_) { colorStart_=track; colorOutline_=outline; }
+    if(!colorStart_) { colorStart_=track; colorOutline_=outline; colorSelection_=TrackSelectionNow(); }
     if(colorOutline_!=outline) throw std::invalid_argument("Finish the current outline color gesture first.");
 }
 void Editor::PreviewOutlineColor(unsigned channel,double value)
@@ -129,7 +139,7 @@ bool Editor::EndOutlineColor(bool cancel)
     if(!colorStart_) return false;
     const bool changed=!cancel && track.track.outlines.at(static_cast<size_t>(colorOutline_)).colorSrgb!=colorStart_->track.outlines.at(static_cast<size_t>(colorOutline_)).colorSrgb;
     if(cancel) track=std::move(*colorStart_);
-    else if(changed) { if(trackUndo_.size()>=128) trackUndo_.erase(trackUndo_.begin()); trackUndo_.push_back({std::move(*colorStart_),true}); trackRedo_.clear(); }
+    else if(changed) { if(trackUndo_.size()>=128) trackUndo_.erase(trackUndo_.begin()); trackUndo_.push_back({std::move(*colorStart_),true,colorSelection_}); trackRedo_.clear(); }
     colorStart_.reset(); colorOutline_=-1; return changed;
 }
 bool Editor::SetOutlineDegree(double value)
@@ -156,6 +166,28 @@ Editor::KnotEdit Editor::SetOutlineKnots(std::string_view text)
     return sameBoundary ? KnotEdit::SameBoundary : KnotEdit::ChangedBoundary;
 }
 bool Editor::GateSelected() const { return gate==0 ? track.track.hasFinish : gate>0 && static_cast<size_t>(gate)<=track.track.checkpoints.size(); }
+bool Editor::CanDeletePoint() const
+{
+    if(mode!=EditorMode::TrackBuilder || colorStart_ || !draft.empty() || gateStart || outline<0 || static_cast<size_t>(outline)>=track.track.outlines.size()) return false;
+    const auto& curve=track.track.outlines[static_cast<size_t>(outline)];
+    return point>=0 && static_cast<size_t>(point)<curve.controls.size() && curve.controls.size()>std::max<size_t>(3,curve.degree+1);
+}
+void Editor::DeletePoint()
+{
+    if(!CanDeletePoint()) throw std::invalid_argument("Select a control point; finish/cancel gestures first. Deletion must keep at least max(3,degree+1) controls.");
+    auto next=track.track.outlines[static_cast<size_t>(outline)]; next.controls.erase(next.controls.begin()+point);
+    Racing2D::MakeUniformKnots(next); (void)Racing2D::Tessellate(next);
+    TrackEdit([&] { track.track.outlines[static_cast<size_t>(outline)]=std::move(next); point=std::min(point,static_cast<int>(track.track.outlines[static_cast<size_t>(outline)].controls.size())-1); });
+}
+bool Editor::CanDeleteGate() const { return mode==EditorMode::TrackBuilder && !colorStart_ && draft.empty() && !gateStart && GateSelected(); }
+void Editor::DeleteGate()
+{
+    if(!CanDeleteGate()) throw std::invalid_argument("Select a placed checkered line/checkpoint; finish/cancel gestures first.");
+    TrackEdit([&] {
+        if(gate==0) { track.track.hasFinish=false; gate=track.track.checkpoints.empty() ? -1 : 1; }
+        else { track.track.checkpoints.erase(track.track.checkpoints.begin()+gate-1); gate=track.track.checkpoints.empty() ? (track.track.hasFinish ? 0 : -1) : std::min(gate,static_cast<int>(track.track.checkpoints.size())); }
+    },false,true);
+}
 Racing2D::Gate Editor::SelectedGate() const
 {
     if(!GateSelected()) throw std::invalid_argument("Select a placed checkered line or checkpoint.");

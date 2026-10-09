@@ -536,3 +536,42 @@ I'll finish the Debug checks and preserve an immutable candidate with the failur
 The current Debug suite passed 76/76, including both hidden GPU workflows. Release smoke still returns occlusion, so displayed delivery remains blocked. I'll freeze the candidate with those results and leave LatestReady unchanged.
 
 The parity inventory now lists the remaining legacy actions, tool/default differences, unnecessary road invalidation on non-shape edits, and manual input/display/power checks.
+
+## Assistant final packaging progress (verbatim)
+
+The frozen-source Release suite just passed 74/74, including both displayed NE18NZ2 checks, with the strict S_OK assertion unchanged. I made no display or OS changes; the earlier occlusion cause remains unresolved.
+
+I'll run the normal copied-build packaging gates now and keep the rejected evidence alongside the final result.
+
+Release passed all 74 checks again during packaging, and Debug is running from the same frozen source. I inspected the captured Model sidebar: the partially visible field stays clipped below the fixed top bar. Promotion still depends on the copied-build and launcher checks passing.
+
+The scroll snapshot is ready:
+
+`C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_22-05-01-796_4f6a04bc9461`
+
+Source: `4f6a04bc9461a15171716b3477abfcbbe4ad1803`. Release 74/74, Debug 76/76 and copied hardware/WARP gates passed. LatestReady selects it. I'll finish the manifest audit and actual CMD launcher check, then hand off the remaining parity inventory.
+
+The packaged gates passed, but the additional CMD smoke check returned `DXGI_STATUS_OCCLUDED` again. The snapshot still has its passing copied hardware/WARP evidence; the CMD result is a separate unresolved limit. I'll record both and make one bounded launcher check before the handoff.
+
+The final CMD check still returned occlusion. The package gates passed; CMD smoke remains a blocker, with the S_OK requirement unchanged and the failure logs preserved. Both Model and Track clipping captures were inspected, all 224 hashes match, all 225 files are read-only, and no Veehiicuul3 test process remains. I'm recording the handoff checkpoint now.
+
+## Assistant final handoff (verbatim)
+
+Scroll restoration is packaged at:
+
+`C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_22-05-01-796_4f6a04bc9461`
+
+Source: `4f6a04bc9461a15171716b3477abfcbbe4ad1803`; implementation: `731ac2a`, fixture correction: `74af8d4`. LatestReady selects it.
+
+Release **74/74**, Debug **76/76**, and copied hardware/WARP gates passed. All 224 hashes match; 225 files are read-only; nine older snapshots are intact. Positions, clamping, clipping, drafts and redo preservation are tested without adding an idle render loop.
+
+**Remaining blocker:** actual CMD smoke returns `DXGI_STATUS_OCCLUDED` (`0x087A0001`), despite passing packaged gates. The cause remains unresolved; strict S_OK acceptance is unchanged and failure evidence is preserved.
+
+The [remaining parity inventory](C:/Users/k/Repository/Veehiicuul3/Documentation/Parity.md) covers:
+
+- Model duplicate/delete/rename, view presets and Ctrl+O.
+- Track delete-start, three-control outlines, tool/view conventions and unnecessary road invalidation.
+- Model replacement/save/history policy and disabled File-popup routing.
+- Physical input/clipboard, OS notifications, display association and power verification.
+
+No test process remains. References are unchanged; all new commits remain local. Independent review cleared the earlier camera/guard build only.

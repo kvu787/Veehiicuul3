@@ -587,5 +587,3 @@ void Renderer::Capture(const std::filesystem::path& path,bool presented)
     stream.write(reinterpret_cast<const char*>(output.data()), static_cast<std::streamsize>(output.size()));
     if (!stream) throw std::runtime_error("Could not write viewport capture.");
 }
-
-

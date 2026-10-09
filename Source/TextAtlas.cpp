@@ -142,4 +142,3 @@ void TextAtlas::Paint(const Ui::State& ui,const std::wstring& status)
     if(ui.contentHeight>ui.panel.h) { Rectangle({ui.panel.x+ui.panel.w-14,ui.panel.y,14,ui.panel.h},{.05f,.055f,.065f,1},all); Rectangle(ui.Thumb(),{.28f,.30f,.34f,1},all); }
     Label(status,12,1398,{.64f,.68f,.73f,1},all);
 }
-

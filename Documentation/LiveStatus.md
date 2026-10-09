@@ -1,0 +1,11 @@
+# Current development checkpoint
+
+2026-10-09 17:10 UTC. Recovery source commit 276f4ba, delegated conversation commit 1abdcc9, runnable integration commit a883e505a233a0fef3944ac2c6d8d760c9c4885c. That integration commit was normally pushed to origin/main and its exact remote hash was verified. Both references remain clean and read-only. Interrupted Editor patch was confirmed absent and implemented afresh after explicit user return.
+
+NE18NZ2 is the BOE0D5B / NE180QAM-NZ2 panel on DISPLAY1, physical desktop bounds (5120,-958)-(8960,1442), 3840x2400. Effective DPI measured 96x96 under per-monitor-aware context; input desktop available. Normal primary remains the PA278QGV at (0,0), 2560x1440. No settings changed by this task.
+
+Custom UI, controller, window integration and DX12 offscreen/presentation code compile with warnings as errors. Release passed all 29 noninteractive checks, including a new DirectWrite coverage/cache/resource regression. The two displayed hardware/WARP checks passed, including centered 1:1 pixel comparison and black-margin checks. Debug passed the initial 28 noninteractive checks; packaging reruns the new 29-check gate from committed source. Hidden/displayed checks report zero GPU warnings/errors. Three-second displayed idle recorded zero new presents, one deadline wake and zero reported CPU milliseconds at Windows accounting resolution. No runnable snapshot or ready pointer exists yet; delivery scripts are ready for committed-source packaging.
+
+Current main tracks origin/main at https://github.com/kvu787/Veehiicuul3.git. Public visibility was disclosed by the parent and user explicitly approved after-each-commit public pushes at 16:53:04 UTC. Only normal Veehiicuul3 pushes are authorized; no origin/credential change or force-push. Stage review and remote hash verification accompany future commits.
+
+First runnable snapshot remaining: commit reviewed delivery scripts/docs, rerun clean-source Release/Debug checks, copy the self-contained executable/runtime/examples, test that copy and launchers from an unrelated directory, perform copied displayed NE18NZ2 checks, freeze hashes/read-only files and update LatestReady only on success. Physical mouse/gamepad and ETW display latency checks remain independent gaps. No implementation blocker is currently known.

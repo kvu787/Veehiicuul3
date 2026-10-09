@@ -18,6 +18,13 @@ int main()
         Require(!e.SetGatePlacement(pose) && SerializeTrack(e.track)==original && e.generated->surfaces[0].data()==geometry,"Derived gate no-op rewrote endpoints/history or lost built road.");
         auto equivalent=pose; equivalent.headingDegrees+=360;
         Require(!e.SetGatePlacement(equivalent) && SerializeTrack(e.track)==original,"Equivalent wrapped heading changed authored endpoints.");
+        auto nonCardinal=pose; nonCardinal.headingDegrees=30.1; e.SetGatePlacement(nonCardinal); const auto angled=SerializeTrack(e.track);
+        nonCardinal=DescribeGate(e.SelectedGate());
+        for(double turns:{-2.,-1.,1.,2.}) { auto wrapped=nonCardinal; wrapped.headingDegrees+=360*turns; Require(!e.SetGatePlacement(wrapped) && SerializeTrack(e.track)==angled,"Non-cardinal full turns rewrote exact endpoints/history."); }
+        Require(e.Undo(false) && SerializeTrack(e.track)==original,"Non-cardinal full-turn no-op added history."); e.Undo(true);
+        auto tiny=nonCardinal; tiny.headingDegrees+=1e-9; Require(e.SetGatePlacement(tiny) && SerializeTrack(e.track)!=angled,"A meaningful tiny heading edit was swallowed."); e.Undo(false);
+        tiny=nonCardinal; tiny.headingDegrees=std::nextafter(nonCardinal.headingDegrees+360.,std::numeric_limits<double>::infinity()); Require(e.SetGatePlacement(tiny),"A distinct adjacent wrapped double was swallowed."); e.Undo(false);
+        e.Undo(false); Require(SerializeTrack(e.track)==original,"Wrapped/tiny-angle history did not restore original.");
         auto changed=pose; changed.center.x+=.25; changed.center.y+=.25; changed.width=8; changed.headingDegrees=180;
         Require(e.SetGatePlacement(changed) && e.generated->surfaces[0].data()==geometry && e.CanDrive(),"Checkered placement failed, dropped built road or invalidated valid Drive.");
         const auto finish=SerializeTrack(e.track); auto restored=e.track; restored.track.finish=initial;

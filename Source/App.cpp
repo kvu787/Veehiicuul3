@@ -1070,12 +1070,19 @@ void App::TestGatePlacements()
     Require(!modifiedTrack_ && !gateDraft_ && SerializeTrack(editor_.track)==original && geometry_.revision==revision && editor_.generated->surfaces[0].data()==surfaces,"Gate no-op changed clean authored state/history/geometry.");
     edit(GateHeading,"360"); click(ApplyGate); Draw(!options_.hidden);
     Require(!modifiedTrack_ && SerializeTrack(editor_.track)==original && geometry_.revision==revision,"Equivalent gate heading changed original endpoints or rendering revision.");
+    edit(GateHeading,"30.1"); click(ApplyGate); Draw(!options_.hidden); SaveTrackProject(path);
+    const auto angled=SerializeTrack(editor_.track); const auto angledRevision=geometry_.revision; const auto angle=Racing2D::DescribeGate(editor_.SelectedGate()).headingDegrees;
+    for(double turns:{-1.,1.,2.}) { edit(GateHeading,Racing2D::FormatKnots({angle+360*turns})); click(ApplyGate); Draw(!options_.hidden); Require(!modifiedTrack_ && SerializeTrack(editor_.track)==angled && geometry_.revision==angledRevision && editor_.generated->surfaces[0].data()==surfaces,"Routed non-cardinal full turn changed exact endpoints/dirty/rendering state."); }
+    edit(GateHeading,Racing2D::FormatKnots({angle+360+1e-9})); click(ApplyGate); Draw(!options_.hidden); Require(modifiedTrack_ && SerializeTrack(editor_.track)!=angled,"Routed tiny wrapped edit was swallowed.");
+    click(UndoAction); Draw(!options_.hidden); Require(SerializeTrack(editor_.track)==angled,"Tiny wrapped edit undo failed.");
+    click(UndoAction); Draw(!options_.hidden); Require(SerializeTrack(editor_.track)==original,"Routed non-cardinal full-turn no-op added history."); SaveTrackProject(path);
+    const auto restoredRevision=geometry_.revision;
     edit(GateX,"-3.75e0"); edit(GateY,"-18.25"); edit(GateWidth,"8"); edit(GateHeading,"180"); Draw(!options_.hidden);
-    Require(gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==original && geometry_.revision==revision,"Gate fields applied before atomic Apply.");
+    Require(gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==original && geometry_.revision==restoredRevision,"Gate fields applied before atomic Apply.");
     Command(ModeMenu); Interface(); Require(!ui_.Find(DriveMode)->enabled,"Drive was enabled for an unapplied gate draft."); Command(ModeMenu); Mode(EditorMode::Drive);
     Require(editor_.mode==EditorMode::TrackBuilder && gateDraft_ && SerializeTrack(editor_.track)==original,"Pending gate draft entered Drive, was discarded or changed authoring.");
     bool blocked=false; try { SaveTrackProject(path); } catch(const std::invalid_argument&) { blocked=true; } Require(blocked && gateDraft_ && SerializeTrack(editor_.track)==original,"Saving committed/discarded the gate draft.");
-    click(CancelGate); Draw(!options_.hidden); Require(!gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==original && geometry_.revision==revision,"Gate Cancel changed clean data/rendering geometry.");
+    click(CancelGate); Draw(!options_.hidden); Require(!gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==original && geometry_.revision==restoredRevision,"Gate Cancel changed clean data/rendering geometry.");
     edit(GateX,"-3.75"); key(VK_ESCAPE); Require(!gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==original,"Gate Escape did not cancel the whole pending form.");
     edit(GateX,"-3.75"); SendMessageW(window_,WM_KILLFOCUS,0,0); Require(!gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==original,"Gate focus-loss cancel changed authoring.");
     edit(GateX,"-3.75"); Mode(EditorMode::ModelBuilder); Mode(EditorMode::TrackBuilder); Require(!gateDraft_ && SerializeTrack(editor_.track)==original && SerializeScene(editor_.model.scene)==model,"Mode change committed a gate draft or changed model.");

@@ -166,7 +166,12 @@ bool Editor::SetGatePlacement(Racing2D::GatePlacement placement)
     if(mode!=EditorMode::TrackBuilder || colorStart_ || gateStart) throw std::invalid_argument("Finish or cancel the active gesture/gate draft before editing a placed gate.");
     const auto original=SelectedGate(); const auto previous=Racing2D::DescribeGate(original);
     const auto next=Racing2D::PlaceGate(placement); // Validate the full planar candidate before touching authored state/history.
-    const bool sameHeading=std::remainder(std::remainder(placement.headingDegrees,360.)-previous.headingDegrees,360.)==0;
+    const auto turns=std::round((placement.headingDegrees-previous.headingDegrees)/360.);
+    // Recognize the exactly rounded result of adding complete turns. A generic
+    // angle epsilon would swallow distinct tiny edits. This bound keeps the
+    // integer turn product exact; larger headings still use normal placement.
+    const bool sameHeading=placement.headingDegrees==previous.headingDegrees ||
+        (std::abs(turns)>=1 && std::abs(turns)<=0x1p44 && placement.headingDegrees==std::fma(turns,360.,previous.headingDegrees));
     if(placement.center==previous.center && placement.width==previous.width && sameHeading) return false;
     TrackEdit([&] { if(gate==0) track.track.finish=next; else track.track.checkpoints[static_cast<size_t>(gate-1)]=next; },false,true);
     return true;

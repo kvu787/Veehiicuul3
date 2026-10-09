@@ -23,7 +23,24 @@ int main()
         const auto draft=knots.edit;auto commit=knots.Commit();Check(commit.size()==1 && commit[0].kind==Ui::ActionKind::CommitKnots && commit[0].text==draft && knots.Editing(),"Vector cleared before atomic application validation");
         knots.Home(false,false);knots.Left(true,true);knots.Replace(L"0");Check(knots.edit.front()==L'0',"Knot caret/selection editing failed");knots.Home(true,false);knots.Text(L'\r');Check(knots.caret==knots.edit.size(),"Enter character mutated vector text");
         knots.SelectAll();knots.Replace(std::wstring(2048,L'0'));Check(knots.edit.size()==2048,"Full bounded vector replacement rejected due to prior selected text length");const auto full=knots.edit;knots.Text(L'1');Check(knots.edit==full,"Knot input exceeded buffer bound");knots.SelectAll();knots.Replace(std::wstring(2049,L'0'));Check(knots.edit==full,"Oversized paste partially replaced knot text");knots.Cancel();Check(!knots.Editing() && knots.edit.empty(),"Knot cancel retained draft/focus");
-        std::cout<<"Custom UI numeric, clipping, scrolling, centered mapping, startup policy and scheduling passed.\n"; return 0;
+        Ui::State routed; routed.panel={0,62,438,100};
+        Ui::Control button;button.id=8;button.kind=Ui::Kind::Button;button.rect={12,96,404,36};
+        Ui::Control fixed=button;fixed.id=9;fixed.rect={12,12,100,38};fixed.clip={0,0,2560,1440};
+        routed.Begin();routed.Add(button);routed.Add(fixed,false);routed.Finish(600);
+        Check(Ui::Intersect(routed.Find(8)->rect,routed.panel).h==4 && routed.Hit(20,159)==8 && routed.Hit(20,162)==0,"Partial bottom control hit escaped its clip");
+        routed.Down(20,159);Check(routed.capture==8,"Partial control failed to capture");
+        Check(routed.Wheel(-120) && routed.Find(8)->rect.y==62 && routed.Find(9)->rect.y==12,"Wheel did not immediately synchronize panel coordinates or moved a fixed control");
+        Check(routed.Up(20,70).size()==1 && routed.Hit(20,110)==0,"Wheel-before-release used stale pointer coordinates");
+        routed.hover=8;Check(routed.SetScroll(130) && routed.hover==0 && Ui::Intersect(routed.Find(8)->rect,routed.panel).h==2 && routed.Hit(20,63)==8 && routed.Hit(20,61)==0,"Partial restored control retained stale hover or escaped the top clip");
+        routed.SetScroll(96);const auto firstThumb=routed.Thumb();routed.Down(firstThumb.x+2,firstThumb.y+2);routed.Move(firstThumb.x+2,firstThumb.y+20);
+        Check(routed.scroll>96 && routed.Find(8)->rect.y==158-routed.scroll,"Captured scrollbar failed immediate layout synchronization");routed.Cancel();
+        routed.Begin();routed.Add(button);routed.Add(fixed,false);routed.Finish(120);
+        Check(routed.scroll==20 && routed.Find(8)->rect.y==138 && routed.Hit(20,150)==8,"Shrink clamp did not synchronize restored drawing/hit regions");
+        routed.Finish(600);Check(routed.scroll==20,"Content growth resurrected an unclamped position");
+        Ui::State reveal;reveal.panel={0,62,438,100};number.rect.y=96;reveal.Begin();reveal.Add(number);reveal.Finish(600);reveal.Down(180,159);
+        Check(reveal.scroll==34 && reveal.Find(1)->rect.y==124 && reveal.Hit(180,159)==1 && reveal.Editing(),"Partial numeric reveal waited for a frame or lost editing focus");
+        fixed.id=8;routed.Add(fixed,false);Check(routed.Find(8)->rect.y==12 && routed.Hit(20,20)==8,"Popup lookup disagreed with topmost hit routing for a shared command ID");
+        std::cout<<"Custom UI numeric, immediate clipping/hits, wheel/capture/shrink/reveal, centered mapping, startup policy and scheduling passed.\n"; return 0;
     }
     catch(const std::exception& e) { std::cerr<<e.what()<<'\n';return 1; }
 }

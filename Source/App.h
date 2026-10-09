@@ -54,6 +54,7 @@ private:
     void TestGatePlacements();
     void TestTrackDeletion();
     void TestCameraFollow();
+    void TestModeScroll();
     void TestUiTransactions();
     void TestProductionLoop();
     void TestWorkflow();
@@ -66,6 +67,7 @@ private:
     RunOptions options_;
     Editor editor_;
     Ui::State ui_;
+    std::array<float,3> modeScroll_{}; // Runtime positions for Model builder, Track builder and Drive.
     Ui::Schedule schedule_;
     Ui::Visibility visibility_;
     bool driveReady_=false; // Recomputed when Mode opens; driving/menu hover never reruns asset/race validation.

@@ -221,6 +221,7 @@ void App::Interface()
         label(L"WASD / arrows: acceleration"); label(L"Space: brake   R: reset"); label(L"Right stick / left trigger / X"); button(TrackMode,L"Return to Track builder"); button(ModelMode,L"Return to Model builder");
     }
     ui_.Finish(y+8);
+    modeScroll_[static_cast<size_t>(editor_.mode)]=ui_.scroll;
     if(menu_)
     {
         const float x=menu_==1 ? 12.f : 137.f; float my=60;
@@ -272,7 +273,11 @@ void App::Mode(EditorMode mode)
 {
     if(mode==editor_.mode) { Redraw(); return; }
     if(mode==EditorMode::Drive && gateDraft_) { status_=L"Apply or cancel the gate draft before Drive."; Redraw(); return; }
-    Abort(); editor_.Mode(mode); ui_.scroll=0; ui_.focus=0; held_.fill(false); accumulator_=0; resetClock_=true;
+    const auto previous=editor_.mode; const auto scroll=ui_.scroll;
+    Abort(); editor_.Mode(mode);
+    modeScroll_[static_cast<size_t>(previous)]=scroll;
+    ui_.scroll=modeScroll_[static_cast<size_t>(mode)]; ui_.hover=0; Interface();
+    held_.fill(false); accumulator_=0; resetClock_=true;
     schedule_.active=mode==EditorMode::Drive && foreground_;
     gamepad_.SetForeground(schedule_.WantsTimer());
     if(mode==EditorMode::Drive && options_.traceSeconds)
@@ -633,6 +638,25 @@ void App::Pointer(UINT message,float x,float y,WPARAM buttons)
     if(slider_ && message!=WM_LBUTTONUP) return;
     if(message==WM_LBUTTONDOWN)
     {
+        // Opening Mode keeps unapplied text. An actual mode change cancels it
+        // through Abort; choosing the current/disabled mode leaves it intact.
+        // Disabled popup rows consume the press rather than hitting the panel.
+        auto modeTarget=ui_.Hit(x,y);
+        if(menu_==1) for(int id:{ModelMode,TrackMode,DriveMode})
+        {
+            const auto* c=ui_.Find(id);
+            if(c && Ui::Intersect(c->rect,c->clip).Contains(x,y))
+            {
+                if(!c->enabled) { Redraw(); return; }
+                modeTarget=id; break;
+            }
+        }
+        if(modeTarget==ModeMenu || modeTarget==ModelMode || modeTarget==TrackMode || modeTarget==DriveMode)
+        {
+            ui_.capture=modeTarget;
+            if(!options_.smoke && !options_.hidden) SetCapture(window_);
+            Redraw(); return;
+        }
         const auto deleteTarget=ui_.Hit(x,y);
         if(deleteTarget==RemovePoint || deleteTarget==RemoveGate || deleteTarget==FollowCarAction || deleteTarget==ResetCarAction) Actions(ui_.Cancel()); // These actions never commit an unapplied numeric/knot field first.
         if(ui_.Editing() && ui_.focus>=GateX && ui_.focus<=GateWidth)
@@ -675,7 +699,7 @@ void App::Pointer(UINT message,float x,float y,WPARAM buttons)
         Actions(ui_.Up(x,y));
         if(modelDrag_) { const auto result=editor_.model; editor_.model=dragStart_; modelDrag_=false; editor_.ModelEdit([&] { editor_.model=result; }); modifiedModel_=true; }
         if(trackDrag_) { const auto result=editor_.track; editor_.track=trackStart_; trackDrag_=false; editor_.TrackEdit([&] { editor_.track=result; }); modifiedTrack_=true; }
-        orbit_=pan_=false; if(!options_.smoke && !options_.hidden && GetCapture()==window_) ReleaseCapture(); if(changedGeometry) Change(); else Redraw();
+        orbit_=pan_=false; if(!options_.smoke && !options_.hidden && GetCapture()==window_) ReleaseCapture(); Interface(); if(changedGeometry) Change(); else Redraw();
     }
     else if(message==WM_RBUTTONDOWN || message==WM_MBUTTONDOWN)
     {
@@ -811,7 +835,7 @@ LRESULT App::Message(UINT message,WPARAM wparam,LPARAM lparam)
     case WM_CAPTURECHANGED:if(reinterpret_cast<HWND>(lparam)!=window_ && (ui_.capture || slider_ || modelDrag_ || trackDrag_ || orbit_ || pan_)) Abort(); return 0;
     case WM_CANCELMODE:Abort();return 0;
     case WM_INPUT:RawMouse(reinterpret_cast<HRAWINPUT>(lparam));return DefWindowProcW(window_,message,wparam,lparam);
-    case WM_KEYDOWN:if(wparam<256) held_[wparam]=true; Key(static_cast<UINT>(wparam)); return 0;
+    case WM_KEYDOWN:if(wparam<256) held_[wparam]=true; Key(static_cast<UINT>(wparam)); if(!ui_.Editing()) Interface(); return 0;
     case WM_KEYUP:if(wparam<256) held_[wparam]=false;return 0;
     case WM_CHAR:if(ui_.Editing() && !(GetKeyState(VK_CONTROL)&0x8000)) { ui_.Text(static_cast<wchar_t>(wparam)); Redraw(); } return 0;
     case WM_MOUSEWHEEL:
@@ -880,7 +904,7 @@ void App::TestWorkflow()
     Command(NewPrimitive); Command(CopyPaint); editor_.model.selection.mode=SelectionMode::Face; editor_.model.selection.face=0; Command(AssignPaint); Command(PaintFirst,.7); Command(ExtrudeAction); Command(RefineAction);
     SaveScene(editor_.model.scene,options_.session/"TwoPaint.modeler"); ExportMesh(editor_.model.scene,options_.session/"TwoPaint.h");
     const auto authored=SerializeScene(editor_.model.scene); Draw(!options_.hidden); renderer_.Capture(options_.session/"Model2560x1440.bmp");
-    Mode(EditorMode::TrackBuilder); TestTrackColors(); TestTrackDegrees(); TestTrackKnots(); TestGatePlacements(); TestTrackDeletion(); TestCameraFollow(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
+    Mode(EditorMode::TrackBuilder); TestTrackColors(); TestTrackDegrees(); TestTrackKnots(); TestGatePlacements(); TestTrackDeletion(); TestCameraFollow(); TestModeScroll(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
     SaveTrack(editor_.track,options_.session/"ExampleCircuit.track");
     Mode(EditorMode::Drive); for(int i=0;i<120;++i) { Tick(1./120,true); if(i%30==0) Draw(!options_.hidden); }
     Draw(!options_.hidden); renderer_.Capture(options_.session/"Drive2560x1440.bmp");
@@ -911,6 +935,102 @@ void App::TestWorkflow()
             else for(int c=0;c<3;++c) Require(presented[output+c]==0,"Presentation margin is not black.");
         }
     }
+}
+void App::TestModeScroll()
+{
+    Command(ExampleTrack); Interface();
+    // Leave real redo entries available in both editors. Scroll/view actions
+    // must not add history or discard those entries.
+    const auto red=ParameterValue(editor_.Material().paint,PaintParameter::Red);
+    Mode(EditorMode::ModelBuilder); Command(PaintFirst,red==.31 ? .32 : .31); const auto redoModel=SerializeScene(editor_.model.scene); Command(UndoAction);
+    SaveModel(options_.session/"ModeScroll.modeler");
+    Mode(EditorMode::TrackBuilder); const auto color=editor_.track.track.outlines.at(static_cast<size_t>(editor_.outline)).colorSrgb[0];
+    Command(OutlineColorFirst,color==.31 ? .32 : .31); const auto redoTrack=SerializeTrack(editor_.track); Command(UndoAction); SaveTrackProject(options_.session/"ModeScroll.track");
+    const auto model=SerializeScene(editor_.model.scene),track=SerializeTrack(editor_.track); const auto road=editor_.generated->surfaces[0].data();
+    auto pointer=[&](UINT message,float x,float y) { const auto image=presentation_.Image(); SendMessageW(window_,message,0,MAKELPARAM(static_cast<SHORT>(image.x+x),static_cast<SHORT>(image.y+y))); };
+    auto click=[&](int id)
+    {
+        const auto* c=ui_.Find(id); Require(c,"Scroll test control missing."); const auto r=Ui::Intersect(c->rect,c->clip);
+        if(r.h<=0) throw std::runtime_error("Scroll test control outside its clip: "+std::to_string(id)+", mode "+std::to_string(static_cast<int>(editor_.mode))+", scroll "+std::to_string(ui_.scroll));
+        pointer(WM_LBUTTONDOWN,r.x+8,r.y+std::min(2.f,r.h*.5f)); pointer(WM_LBUTTONUP,r.x+8,r.y+std::min(2.f,r.h*.5f)); Interface();
+    };
+    auto mode=[&](int id) { click(ModeMenu); click(id); };
+    auto wheel=[&](int delta)
+    {
+        const auto image=presentation_.Image(); SendMessageW(window_,WM_MOUSEWHEEL,MAKEWPARAM(0,static_cast<SHORT>(delta)),MAKELPARAM(static_cast<SHORT>(presentation_.originX+image.x+200),static_cast<SHORT>(presentation_.originY+image.y+300)));
+    };
+    auto partial=[&](int id)
+    {
+        const auto* c=ui_.Find(id); Require(c && c->enabled,"Partial scroll control missing/disabled.");
+        const auto position=ui_.scroll+c->rect.y-ui_.panel.y+c->rect.h-3;
+        wheel(static_cast<int>(std::round((ui_.scroll-position)/.8f)));
+        c=ui_.Find(id); const auto visible=Ui::Intersect(c->rect,c->clip);
+        Require(visible.h>=1 && visible.h<=5 && ui_.Hit(visible.x+8,visible.y+visible.h*.5f)==id && ui_.Hit(visible.x+8,ui_.panel.y-1)!=id,"Restored partial control hit escaped clipping or required a frame.");
+        return ui_.scroll;
+    };
+    auto clean=[&]
+    {
+        Require(!modifiedModel_ && !modifiedTrack_ && SerializeScene(editor_.model.scene)==model && SerializeTrack(editor_.track)==track && editor_.generated->surfaces[0].data()==road,"Sidebar routing changed authored/clean state or rebuilt road storage.");
+        Require(editor_.CanUndo(true),"Sidebar routing cleared the active editor's existing redo history.");
+        Require(!schedule_.WantsTimer(),"Sidebar routing armed an editor/foreground-inactive Drive timer.");
+    };
+    mode(ModelMode); const auto modelPosition=partial(PreviewLevel);
+    mode(TrackMode); const auto trackPosition=partial(OutlineKnots);
+    mode(DriveMode); Require(ui_.scroll==0,"Compact Drive panel inherited an editor offset."); wheel(-120); Require(ui_.scroll==0,"Compact Drive panel scrolled beyond its range.");
+    mode(ModelMode); Require(ui_.scroll==modelPosition,"Model builder lost its independent scroll position."); partial(PreviewLevel);
+    Draw(!options_.hidden); renderer_.Capture(options_.session/"ModeScrollModel2560x1440.bmp");
+    click(PreviewLevel); ui_.Replace(L"2"); const auto numeric=ui_.edit; wheel(-30);
+    Require(ui_.Editing() && ui_.edit==numeric && !modifiedModel_,"Wheel consumed an active numeric draft."); const auto revealedModel=ui_.scroll;
+    click(ModeMenu); Require(ui_.Editing() && ui_.edit==numeric && !modifiedModel_,"Opening Mode committed/cleared an active numeric draft."); click(ModelMode);
+    Require(ui_.Editing() && ui_.edit==numeric && ui_.scroll==revealedModel,"Choosing the current mode lost numeric text or scroll state.");
+    mode(TrackMode); Require(!ui_.Editing() && ui_.scroll==trackPosition,"Actual mode change failed to cancel text or restore Track scroll."); clean();
+    click(OutlineKnots); ui_.Replace(L"0 1"); const auto knots=ui_.edit; const auto revealedTrack=ui_.scroll;
+    click(ModeMenu); click(TrackMode); Require(ui_.Editing() && ui_.edit==knots && ui_.scroll==revealedTrack,"Same-mode routing committed an invalid knot draft or moved scroll.");
+    mode(DriveMode); Require(!ui_.Editing(),"Drive entry retained an unapplied knot draft."); mode(TrackMode); Require(ui_.scroll==revealedTrack,"Track return lost its revealed scroll position."); clean();
+    // Gate forms retain their existing pending-Drive guard. A disabled popup
+    // consumes both clicks without committing partial field text underneath.
+    Command(GateFirst); Command(GateWidth,Racing2D::DescribeGate(editor_.SelectedGate()).width+1); Interface();
+    const auto* gate=ui_.Find(GateX); Require(gate,"Gate numeric missing.");
+    wheel(static_cast<int>(std::round((ui_.panel.y+200-gate->rect.y)/.8f))); Interface(); click(GateX); ui_.Replace(L"1e");
+    const auto pending=gateDraft_; const auto gateText=ui_.edit; const auto gatePosition=ui_.scroll;
+    click(ModeMenu); Require(!driveReady_,"Pending gate form enabled Drive."); click(DriveMode);
+    Require(editor_.mode==EditorMode::TrackBuilder && gateDraft_ && pending && gateDraft_->center==pending->center && gateDraft_->width==pending->width && ui_.Editing() && ui_.edit==gateText && ui_.scroll==gatePosition,"Disabled Drive hit the underlying panel or consumed a gate draft/scroll.");
+    click(TrackMode); Require(ui_.Editing() && gateDraft_ && ui_.edit==gateText,"Same Track mode discarded a gate draft."); mode(ModelMode);
+    Require(!gateDraft_ && !ui_.Editing() && ui_.scroll==revealedModel,"Leaving Track failed to cancel its gate draft or restore Model scroll."); clean();
+    // The shipped Drive content fits. A bounded in-process shorter-panel
+    // fixture exercises its independent nonzero position without drawing it.
+    const auto fullHeight=ui_.panel.h; ui_.panel.h=240; Interface(); mode(DriveMode); wheel(-120); const auto drivePosition=ui_.scroll;
+    Require(drivePosition==96,"Drive overflow fixture did not scroll."); mode(TrackMode); mode(DriveMode); Require(ui_.scroll==drivePosition,"Drive lost its separate position on reentry.");
+    ui_.panel.h=fullHeight; Interface(); Require(ui_.scroll==0 && modeScroll_[2]==0,"Drive content shrink retained an out-of-range saved offset."); mode(ModelMode); clean();
+    const auto selection=editor_.model.selection; editor_.model.selection.object=-1; Interface(); Require(ui_.scroll==0 && modeScroll_[0]==0,"Model content shrink did not clamp/store its saved position.");
+    mode(TrackMode); mode(ModelMode); Require(ui_.scroll==0,"Model restoration resurrected its old oversized offset."); editor_.model.selection=selection; Interface(); Require(ui_.scroll==0,"Model content growth resurrected an oversized offset.");
+    mode(TrackMode); const auto selected=std::array{editor_.outline,editor_.point,editor_.gate,editor_.decoration};
+    const auto oldTrack=ui_.scroll; editor_.outline=editor_.point=editor_.gate=editor_.decoration=-1; Interface(); const auto clampedTrack=ui_.scroll;
+    Require(clampedTrack==std::min(oldTrack,std::max(0.f,ui_.contentHeight-ui_.panel.h)) && clampedTrack<oldTrack && modeScroll_[1]==clampedTrack,"Track content shrink did not clamp/store its saved position.");
+    mode(ModelMode); mode(TrackMode); Require(ui_.scroll==clampedTrack,"Track restoration resurrected an oversized offset.");
+    editor_.outline=selected[0];editor_.point=selected[1];editor_.gate=selected[2];editor_.decoration=selected[3];Interface(); Require(ui_.scroll==clampedTrack,"Track content growth resurrected an oversized offset."); clean();
+    partial(OutlineKnots); Draw(!options_.hidden); renderer_.Capture(options_.session/"ModeScrollTrack2560x1440.bmp");
+    const auto revision=geometry_.revision; wheel(-120); Draw(!options_.hidden); Require(geometry_.revision==revision,"Sidebar wheel rebuilt rendering geometry.");
+    wheel(-30000); Draw(!options_.hidden); const auto presents=renderer_.Presents(); wheel(-120);
+    Require(!schedule_.dirty && !schedule_.WantsTimer() && renderer_.Presents()==presents,"Clamped wheel scheduled idle redraw/timer/present work."); clean();
+    Command(RedoAction); Require(SerializeTrack(editor_.track)==redoTrack,"Track scroll changed the retained redo operation."); Command(UndoAction); SaveTrackProject(options_.session/"ModeScroll.track");
+    mode(ModelMode); Command(RedoAction); Require(SerializeScene(editor_.model.scene)==redoModel,"Model scroll changed the retained redo operation."); Command(UndoAction); SaveModel(options_.session/"ModeScroll.modeler"); clean();
+    // Isolate later workflow fixtures; application mode changes never reset
+    // these positions and no timer is used for restoration.
+    mode(TrackMode); Interface();
+    Require(!editor_.track.decorations.empty() && ui_.Find(RemoveDecoration),"Content-shrink fixture has no selected decoration."); wheel(-30000);
+    const auto bottom=ui_.scroll; const auto* remove=ui_.Find(RemoveDecoration); const auto removal=Ui::Intersect(remove->rect,remove->clip);
+    Require(removal.h>0,"Bottom deletion button was clipped."); pointer(WM_LBUTTONDOWN,removal.x+8,removal.y+2); pointer(WM_LBUTTONUP,removal.x+8,removal.y+2);
+    Require(modifiedTrack_ && ui_.scroll<bottom && ui_.scroll==std::max(0.f,ui_.contentHeight-ui_.panel.h) && modeScroll_[1]==ui_.scroll && ui_.capture==0,"Routed content deletion waited for a frame to clamp layout/scroll/capture.");
+    Command(UndoAction); Interface(); SaveTrackProject(options_.session/"ModeScroll.track"); Require(SerializeTrack(editor_.track)==track && !modifiedTrack_,"Content deletion undo/save failed to restore its fixture.");
+    modeScroll_.fill(0); ui_.SetScroll(0); Interface();
+    std::ofstream(options_.session/"ModeScrollVerification.txt")<<"Own-HWND wheel/Mode menu routing retained independent Model/Track/Drive positions\n"
+        <<"Current compact Drive fits; shorter-panel fixture verified a nonzero Drive position without drawing\n"
+        <<"Shrink/grow/restore clamps persisted; partial top controls clipped/hit correctly before the next frame\n"
+        <<"Numeric/knot/gate drafts survived menu/current/disabled modes; actual mode changes canceled unapplied drafts\n"
+        <<"Authored serialization, clean flags, actual redo operations, generated storage and wheel rendering revision preserved\n"
+        <<"Clamped wheel adds no dirty frame/timer/present work; production idle wait remains unchanged\n"
+        <<"Physical pointer/keyboard/OS notifications/display association/electrical power remain unverified\n";
 }
 void App::TestCameraFollow()
 {

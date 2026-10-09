@@ -14,13 +14,22 @@ void State::Add(Control c,bool scrolling)
 void State::Finish(float height)
 {
     contentHeight=height;
-    const auto next=std::clamp(scroll,0.f,std::max(0.f,contentHeight-panel.h));
-    const float difference=scroll-next;
-    if(difference) for(auto& c:controls) if(c.clip.x==panel.x && c.clip.y==panel.y) c.rect.y+=difference;
-    scroll=next;
+    SetScroll(scroll);
     if(focus && (!Find(focus) || !Find(focus)->enabled)) { focus=0; edit.clear(); }
 }
-const Control* State::Find(int id) const { for(const auto& c:controls) if(c.id==id) return &c; return nullptr; }
+bool State::SetScroll(float position)
+{
+    const auto next=std::clamp(position,0.f,std::max(0.f,contentHeight-panel.h));
+    const float difference=scroll-next;
+    if(!difference) return false;
+    // Keep drawing and pointer routing in the same coordinates, including when
+    // more wheel/capture messages arrive before the next on-demand frame.
+    for(auto& c:controls)
+        if(c.clip.x==panel.x && c.clip.y==panel.y && c.clip.w==panel.w && c.clip.h==panel.h) c.rect.y+=difference;
+    scroll=next; hover=0;
+    return true;
+}
+const Control* State::Find(int id) const { for(auto c=controls.rbegin();c!=controls.rend();++c) if(c->id==id) return &*c; return nullptr; }
 int State::Hit(float x,float y) const
 {
     if(contentHeight>panel.h && Rect{panel.x+panel.w-14,panel.y,14,panel.h}.Contains(x,y)) return -1;
@@ -39,18 +48,17 @@ bool State::Move(float x,float y)
     if(capture==-1)
     {
         const auto thumb=Thumb();
-        const auto old=scroll;
-        scroll=std::clamp(scrollAnchor_+(y-pointerAnchor_)*(contentHeight-panel.h)/std::max(1.f,panel.h-thumb.h),0.f,std::max(0.f,contentHeight-panel.h));
-        return old!=scroll;
+        return SetScroll(scrollAnchor_+(y-pointerAnchor_)*(contentHeight-panel.h)/std::max(1.f,panel.h-thumb.h));
     }
     const auto old=hover; hover=Hit(x,y); return old!=hover;
 }
 void State::Reveal(const Control& c)
 {
     if(c.clip.y!=panel.y) return;
-    if(c.rect.y<panel.y) scroll-=panel.y-c.rect.y;
-    if(c.rect.y+c.rect.h>panel.y+panel.h) scroll+=c.rect.y+c.rect.h-panel.y-panel.h;
-    scroll=std::clamp(scroll,0.f,std::max(0.f,contentHeight-panel.h));
+    auto next=scroll;
+    if(c.rect.y<panel.y) next-=panel.y-c.rect.y;
+    else if(c.rect.y+c.rect.h>panel.y+panel.h) next+=c.rect.y+c.rect.h-panel.y-panel.h;
+    SetScroll(next);
 }
 std::vector<Action> State::Down(float x,float y)
 {
@@ -59,7 +67,7 @@ std::vector<Action> State::Down(float x,float y)
     {
         capture=-1;
         const auto thumb=Thumb();
-        if(!thumb.Contains(x,y)) scroll=std::clamp(scroll+(y<thumb.y ? -panel.h*.8f : panel.h*.8f),0.f,std::max(0.f,contentHeight-panel.h));
+        if(!thumb.Contains(x,y)) SetScroll(scroll+(y<thumb.y ? -panel.h*.8f : panel.h*.8f));
         pointerAnchor_=y; scrollAnchor_=scroll; return actions;
     }
     const auto* c=Find(id); if(!c) { focus=0; return actions; }
@@ -106,7 +114,7 @@ std::vector<Action> State::Cancel()
 }
 bool State::Wheel(float delta)
 {
-    const auto before=scroll; scroll=std::clamp(scroll-delta*.8f,0.f,std::max(0.f,contentHeight-panel.h)); return before!=scroll;
+    return SetScroll(scroll-delta*.8f);
 }
 void State::RemoveSelection()
 {

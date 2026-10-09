@@ -51,6 +51,7 @@ public:
     std::vector<Action> Up(float x,float y);
     std::vector<Action> Commit();
     std::vector<Action> Cancel();
+    bool SetScroll(float position);
     bool Wheel(float delta);
     void Text(wchar_t value);
     void Replace(std::wstring value);

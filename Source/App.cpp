@@ -17,7 +17,7 @@ enum Id { ModeMenu=1,FileMenu,UndoAction,RedoAction,FrameAction,CageAction,QuitA
     ModelMode=20,TrackMode,DriveMode,NewCar=30,NewPrimitive,OpenProject,SaveFile,SaveAs,ExportFile,
     AddBox=40,AddPlane,AddCylinder,ObjectTarget=50,VertexTarget,FaceTarget,RefineAction,ExtrudeAction,CopyPaint,AssignPaint,ResetPaint,
     NewTrack=100,ExampleTrack,BuildTrack,SelectTool,OutlineTool,FinishOutline,CancelDraft,SpawnTool,FinishTool,CheckpointTool,DecorationTool,UseVehicle,UseDecoration,
-    RemoveOutline,RemoveCheckpoint,RemoveDecoration,
+    RemoveOutline,RemoveCheckpoint,RemoveDecoration,RemovePoint,RemoveGate,
     Speed=2300,PreviewLevel,EditStep,SpawnX=3000,SpawnY,SpawnHeading,VehicleScale,PointX,PointY,PointWeight,DecorX,DecorY,DecorHeading,DecorHeight,DecorScale,DeadzoneX,DeadzoneY };
 constexpr int ObjectFirst=1000,MaterialFirst=1100,OutlineFirst=1200,PointFirst=1300,DecorFirst=1400,SliderFirst=2000,PaintFirst=2100,TransformFirst=2200;
 constexpr int OutlineColorFirst=3100,OutlineColorSliderFirst=3110;
@@ -186,6 +186,8 @@ void App::Interface()
             }
             for(size_t i=0;i<curve.controls.size();++i) button(PointFirst+static_cast<int>(i),L"Control point "+std::to_wstring(i+1),true,editor_.point==static_cast<int>(i));
             if(editor_.point>=0 && static_cast<size_t>(editor_.point)<curve.controls.size()) { const auto p=curve.controls[static_cast<size_t>(editor_.point)]; number(PointX,L"Point X",p.position.x,-10000,10000); number(PointY,L"Point Y",p.position.y,-10000,10000); number(PointWeight,L"NURBS weight",p.weight,.001,1000); }
+            button(RemovePoint,L"Delete selected control point",!gateDraft_ && editor_.CanDeletePoint());
+            label(L"Delete changes shape; resets knots."); label(L"Keep max(3,degree+1) controls.");
         }
         label(L"Vehicle start"); number(SpawnX,L"Start X",editor_.track.track.spawn.position.x,-10000,10000); number(SpawnY,L"Start Y",editor_.track.track.spawn.position.y,-10000,10000); number(SpawnHeading,L"Heading (rad)",editor_.track.track.spawn.heading,-10000,10000); number(VehicleScale,L"Vehicle scale",editor_.track.vehicleScale,.05,10);
         number(DeadzoneX,L"Stick deadzone X",editor_.track.deadzoneX,0,.94999); number(DeadzoneY,L"Stick deadzone Y",editor_.track.deadzoneY,0,.94999);
@@ -193,6 +195,7 @@ void App::Interface()
         label(L"Select checkered line / checkpoint");
         button(GateFirst,L"Checkered line",editor_.track.track.hasFinish,editor_.gate==0);
         for(size_t i=0;i<editor_.track.track.checkpoints.size();++i) button(GateFirst+1+static_cast<int>(i),L"Checkpoint "+std::to_wstring(i+1),true,editor_.gate==static_cast<int>(i+1));
+        button(RemoveGate,L"Delete selected gate",editor_.CanDeleteGate());
         if(editor_.GateSelected())
         {
             const auto placement=gateDraft_ ? *gateDraft_ : Racing2D::DescribeGate(editor_.SelectedGate());
@@ -289,9 +292,10 @@ void App::Command(int id,double value)
     {
         gateDraft_.reset();
         if(!editor_.CanUndo(id==RedoAction)) { Redraw(); return; }
+        const auto selection=std::array{editor_.outline,editor_.point,editor_.decoration,editor_.gate};
         const bool geometry=editor_.Undo(id==RedoAction);
         if(editor_.mode==EditorMode::ModelBuilder) modifiedModel_=true; else modifiedTrack_=true;
-        if(geometry) Change(); else Redraw(); return;
+        if(geometry) Change(); else if(selection!=std::array{editor_.outline,editor_.point,editor_.decoration,editor_.gate}) Change(false); else Redraw(); return;
     }
     else if(id==OpenProject || id==SaveFile || id==SaveAs || id==ExportFile) { File(id); return; }
     else if(id==NewCar || id==NewPrimitive) { editor_.ModelEdit([&] { editor_.model.scene=id==NewCar ? MakeSlopeCarScene() : Scene{}; editor_.model.selection={SelectionMode::Object,0,-1,{},0}; }); modelPath_.clear(); editor_.Frame(); }
@@ -343,6 +347,17 @@ void App::Command(int id,double value)
     {
         gateDraft_.reset(); Actions(ui_.Cancel()); status_=L"Gate draft cancelled; authored state kept."; Redraw();
         return;
+    }
+    else if(id==RemovePoint)
+    {
+        if(gateDraft_) throw std::invalid_argument("Apply or cancel the gate form before deleting a control point.");
+        editor_.DeletePoint(); modifiedTrack_=true; Change();
+        status_=L"Control point deleted; knots reset to uniform spacing, shape changed. Build surfaces before Drive."; return;
+    }
+    else if(id==RemoveGate)
+    {
+        const bool finish=editor_.gate==0; editor_.DeleteGate(); gateDraft_.reset(); Actions(ui_.Cancel()); modifiedTrack_=true; Change(finish);
+        status_=L"Selected gate deleted; other gates/order and built roads kept. Undo restores it; Drive validates remaining placements."; return;
     }
     else if(id>=OutlineColorFirst && id<OutlineColorFirst+3)
     {
@@ -601,6 +616,8 @@ void App::Pointer(UINT message,float x,float y,WPARAM buttons)
     if(slider_ && message!=WM_LBUTTONUP) return;
     if(message==WM_LBUTTONDOWN)
     {
+        const auto deleteTarget=ui_.Hit(x,y);
+        if(deleteTarget==RemovePoint || deleteTarget==RemoveGate) Actions(ui_.Cancel()); // Delete committed data, never commit a partial numeric/knot field first.
         if(ui_.Editing() && ui_.focus>=GateX && ui_.focus<=GateWidth)
         {
             const auto target=ui_.Hit(x,y);
@@ -846,7 +863,7 @@ void App::TestWorkflow()
     Command(NewPrimitive); Command(CopyPaint); editor_.model.selection.mode=SelectionMode::Face; editor_.model.selection.face=0; Command(AssignPaint); Command(PaintFirst,.7); Command(ExtrudeAction); Command(RefineAction);
     SaveScene(editor_.model.scene,options_.session/"TwoPaint.modeler"); ExportMesh(editor_.model.scene,options_.session/"TwoPaint.h");
     const auto authored=SerializeScene(editor_.model.scene); Draw(!options_.hidden); renderer_.Capture(options_.session/"Model2560x1440.bmp");
-    Mode(EditorMode::TrackBuilder); TestTrackColors(); TestTrackDegrees(); TestTrackKnots(); TestGatePlacements(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
+    Mode(EditorMode::TrackBuilder); TestTrackColors(); TestTrackDegrees(); TestTrackKnots(); TestGatePlacements(); TestTrackDeletion(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
     SaveTrack(editor_.track,options_.session/"ExampleCircuit.track");
     Mode(EditorMode::Drive); for(int i=0;i<120;++i) { Tick(1./120,true); if(i%30==0) Draw(!options_.hidden); }
     Draw(!options_.hidden); renderer_.Capture(options_.session/"Drive2560x1440.bmp");
@@ -1116,6 +1133,65 @@ void App::TestGatePlacements()
     click(GateFirst+1); Mode(EditorMode::Drive); Tick(.02,true); Mode(EditorMode::TrackBuilder); Require(editor_.gate==1 && !modifiedTrack_ && SerializeTrack(editor_.track)==checkpoint && SerializeScene(editor_.model.scene)==model && SerializeScene(editor_.track.vehicle)==vehicle,"Gate Drive return lost selection/authored state/assets.");
     reveal(GateX); ui_.scroll=std::max(0.f,ui_.scroll-120); Draw(!options_.hidden); renderer_.Capture(options_.session/"GatePlacements2560x1440.bmp");
     std::ofstream(options_.session/"GatePlacementVerification.txt")<<"Own-window routed selection/character/key and Apply controls passed\nFour-field draft atomically applied; no-op/wrapped heading kept original endpoints and rendering revision\nCancel/Escape/focus/mode/selection cancellation and previously dirty state passed\nInvalid numeric/full candidate retained authored state; rejected full candidate retained draft\nPending draft blocked save/Drive; off-road applied gate kept surfaces but disabled/rejected Drive\nOriginal road surfaces retained through checkered/checkpoint Apply and routed undo/redo draws\nSelected gate isolation/order/paints/assets and production save/reload/Drive return passed\nPhysical input/global clipboard/actual notification delivery/real display association: pending\n";
+    trackPath_.clear();
+}
+void App::TestTrackDeletion()
+{
+    Command(ExampleTrack); editor_.outline=0; editor_.point=11;
+    editor_.TrackEdit([&] { auto& c=editor_.track.track.outlines[0]; c.controls[0].weight=.81; for(auto& k:c.knots) k=20+2*k; }); editor_.BuildTrack(); Change(); Draw(!options_.hidden);
+    const auto path=options_.session/"TrackDeletion.track"; SaveTrackProject(path);
+    const auto original=SerializeTrack(editor_.track),model=SerializeScene(editor_.model.scene),vehicle=SerializeScene(editor_.track.vehicle); const auto curve=editor_.track.track.outlines[0];
+    auto key=[&](UINT value) { SendMessageW(window_,WM_KEYDOWN,value,0); SendMessageW(window_,WM_KEYUP,value,0); };
+    auto reveal=[&](int id,bool enabled=true) {
+        Interface(); const auto* c=ui_.Find(id); Require(c && (!enabled || c->enabled),"Deletion control missing/disabled unexpectedly.");
+        if(c->clip.y==ui_.panel.y) { ui_.scroll+=c->rect.y-ui_.panel.y; Interface(); c=ui_.Find(id); }
+        const auto r=Ui::Intersect(c->rect,c->clip); Require(r.h>0,"Deletion control was not reachable by scrolling."); return r;
+    };
+    auto down=[&](int id,bool enabled=true) { const auto r=reveal(id,enabled),image=presentation_.Image(); const auto p=MAKELPARAM(static_cast<SHORT>(r.x+8+image.x),static_cast<SHORT>(r.y+4+image.y)); Message(WM_LBUTTONDOWN,MK_LBUTTON,p); return p; };
+    auto click=[&](int id,bool enabled=true) { const auto p=down(id,enabled); Message(WM_LBUTTONUP,0,p); };
+    auto edit=[&](int id,const char* text,bool enter=false) { click(id); key(VK_BACK); for(auto ch:std::string(text)) SendMessageW(window_,WM_CHAR,static_cast<unsigned char>(ch),0); if(enter) key(VK_RETURN); };
+    edit(PointX,"1e"); down(RemovePoint); Message(WM_LBUTTONUP,0,MAKELPARAM(0,0)); Draw(!options_.hidden);
+    Require(!modifiedTrack_ && !ui_.Editing() && SerializeTrack(editor_.track)==original && editor_.point==11,"Cancelled deletion press committed a partial numeric field/deleted a point.");
+    edit(PointX,"123"); click(RemovePoint); Draw(!options_.hidden); const auto pointDeleted=SerializeTrack(editor_.track);
+    auto restored=editor_.track; restored.track.outlines[0]=curve;
+    Require(modifiedTrack_ && !editor_.generated && !editor_.CanDrive() && editor_.point==10 && SerializeTrack(restored)==original && status_.find(L"knots reset")!=std::wstring::npos,"Routed point deletion failed, changed another authored field, hid shape reset or kept stale road.");
+    Command(ModeMenu); Interface(); Require(!ui_.Find(DriveMode)->enabled,"Deleted control retained Drive menu readiness."); Command(ModeMenu);
+    click(UndoAction); Draw(!options_.hidden); Require(modifiedTrack_ && SerializeTrack(editor_.track)==original && editor_.point==11 && !editor_.generated,"Point undo did not restore exact original numeric values/knots/weights/selection.");
+    click(RedoAction); Draw(!options_.hidden); Require(SerializeTrack(editor_.track)==pointDeleted && editor_.point==10 && !editor_.generated,"Routed point redo failed.");
+    reveal(RemovePoint); ui_.scroll=std::max(0.f,ui_.scroll-180); Draw(!options_.hidden); renderer_.Capture(options_.session/"PointDeletion2560x1440.bmp");
+    Command(BuildTrack); Draw(!options_.hidden); Require(editor_.CanDrive(),"Deleted point example did not rebuild for Drive."); SaveTrackProject(path);
+    const auto surfaces=editor_.generated->surfaces[0].data(); const auto afterPoint=SerializeTrack(editor_.track);
+    click(GateFirst+2); const auto removed=editor_.SelectedGate(); edit(GateX,"500",true); Interface(); Require(gateDraft_ && !ui_.Find(RemovePoint)->enabled,"Pending gate form allowed point deletion.");
+    bool rejected=false; try { Command(RemovePoint); } catch(const std::invalid_argument&) { rejected=true; } Require(rejected && gateDraft_ && !modifiedTrack_ && SerializeTrack(editor_.track)==afterPoint,"Point deletion consumed pending gate form or changed authoring.");
+    edit(GateWidth,"1e"); click(RemoveGate); Draw(!options_.hidden); const auto gateDeleted=SerializeTrack(editor_.track); restored=editor_.track; restored.track.checkpoints.insert(restored.track.checkpoints.begin()+1,removed);
+    Require(modifiedTrack_ && !gateDraft_ && !ui_.Editing() && SerializeTrack(restored)==afterPoint && editor_.gate==2 && editor_.generated->surfaces[0].data()==surfaces && editor_.CanDrive(),"Selected gate deletion committed partial fields/another gate, lost order/selection/road or valid Drive.");
+    click(UndoAction); Draw(!options_.hidden); Require(SerializeTrack(editor_.track)==afterPoint && editor_.gate==2 && editor_.generated->surfaces[0].data()==surfaces,"Routed gate undo lost endpoints/order/selection/cached road.");
+    click(RedoAction); Draw(!options_.hidden); Require(SerializeTrack(editor_.track)==gateDeleted && editor_.gate==2 && editor_.generated->surfaces[0].data()==surfaces,"Routed gate redo failed."); SaveTrackProject(path);
+    reveal(RemoveGate); ui_.scroll=std::max(0.f,ui_.scroll-180); Draw(!options_.hidden); renderer_.Capture(options_.session/"GateDeletion2560x1440.bmp");
+    Command(OutlineColorFirst,.2); OpenTrackProject(path); Require(!modifiedTrack_ && SerializeTrack(editor_.track)==gateDeleted && editor_.CanDrive(),"Production deletion save/reload failed.");
+    const auto reloadedSurfaces=editor_.generated->surfaces[0].data(); click(GateFirst); const auto finish=editor_.SelectedGate(); click(RemoveGate); Draw(!options_.hidden);
+    Require(modifiedTrack_ && !editor_.track.track.hasFinish && editor_.track.track.finish.a==finish.a && editor_.track.track.finish.b==finish.b && editor_.gate==1 && !editor_.CanDrive() && editor_.generated->surfaces[0].data()==reloadedSurfaces && std::none_of(shown_.objects.begin(),shown_.objects.end(),[](const ModelObject& object){return object.name=="Checkered black";}),"Finish deletion lost payload/cached roads, retained checkered mesh or enabled Drive.");
+    const auto finishDeleted=SerializeTrack(editor_.track); Command(ModeMenu); Interface(); Require(!ui_.Find(DriveMode)->enabled,"Missing finish enabled Drive menu."); Command(ModeMenu);
+    rejected=false; try { Mode(EditorMode::Drive); } catch(const std::invalid_argument&) { rejected=true; } Require(rejected && SerializeTrack(editor_.track)==finishDeleted && editor_.mode==EditorMode::TrackBuilder,"Missing-finish Drive rejection changed authoring/mode.");
+    click(UndoAction); Draw(!options_.hidden); Require(SerializeTrack(editor_.track)==gateDeleted && editor_.gate==0 && editor_.CanDrive() && editor_.generated->surfaces[0].data()==reloadedSurfaces,"Finish undo did not restore selection/presentation/valid Drive.");
+    click(RedoAction); Draw(!options_.hidden); Require(SerializeTrack(editor_.track)==finishDeleted && !editor_.CanDrive(),"Finish redo failed.");
+    click(GateFirst+2); click(RemoveGate); Require(editor_.gate==1 && editor_.track.track.checkpoints.size()==1,"Last selected checkpoint deletion did not select the previous survivor.");
+    click(RemoveGate); Draw(!options_.hidden); Require(editor_.gate==-1 && !editor_.CanDeleteGate() && !editor_.CanDrive() && editor_.generated->surfaces[0].data()==reloadedSurfaces,"Final gate deletion retained stale selection/Drive or lost road surfaces.");
+    const auto noGates=SerializeTrack(editor_.track); SaveTrackProject(options_.session/"NoGates.track"); const auto emptyRevision=geometry_.revision; click(RemoveGate,false); Draw(!options_.hidden);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==noGates && geometry_.revision==emptyRevision,"Disabled no-gate delete created a dirty/history/rendering change.");
+    click(UndoAction); Require(modifiedTrack_ && editor_.gate==1 && editor_.track.track.checkpoints.size()==1,"Disabled delete added a history entry."); click(UndoAction); click(UndoAction);
+    Require(SerializeTrack(editor_.track)==gateDeleted && editor_.gate==0 && editor_.CanDrive(),"Gate deletion sequence failed exact undo/selection restoration."); SaveTrackProject(path);
+    Mode(EditorMode::Drive); rejected=false; try { Command(RemovePoint); } catch(const std::invalid_argument&) { rejected=true; } Require(rejected,"Drive allowed hidden point delete command.");
+    rejected=false; try { Command(RemoveGate); } catch(const std::invalid_argument&) { rejected=true; } Require(rejected,"Drive allowed hidden gate delete command."); Tick(.02,true); Mode(EditorMode::TrackBuilder);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==gateDeleted && SerializeScene(editor_.model.scene)==model && SerializeScene(editor_.track.vehicle)==vehicle,"Deletion Drive return changed authored state/assets/dirty state.");
+    click(PointFirst+10); while(editor_.CanDeletePoint()) click(RemovePoint); Draw(!options_.hidden); Require(editor_.track.track.outlines[0].controls.size()==4 && editor_.point==3 && !editor_.generated,"Cubic point minimum/selection or invalidation failed.");
+    const auto minimum=SerializeTrack(editor_.track); SaveTrackProject(options_.session/"MinimumControls.track"); const auto minimumRevision=geometry_.revision; click(RemovePoint,false); Draw(!options_.hidden);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==minimum && geometry_.revision==minimumRevision && !ui_.Find(RemovePoint)->enabled,"Disabled minimum deletion changed saved authoring/geometry.");
+    click(UndoAction); Require(modifiedTrack_ && editor_.track.track.outlines[0].controls.size()==5 && editor_.point==4,"Minimum rejection changed undo history/selection.");
+    OpenTrackProject(path); Require(!modifiedTrack_ && SerializeTrack(editor_.track)==gateDeleted && editor_.CanDrive(),"Final deletion example reload failed.");
+    const auto finalSurfaces=editor_.generated->surfaces[0].data(); Command(OutlineColorFirst,.2); click(OutlineFirst+1); click(PointFirst+5); click(GateFirst+2); Draw(!options_.hidden); const auto changedSelectionRevision=geometry_.revision;
+    click(UndoAction); Draw(!options_.hidden); Require(SerializeTrack(editor_.track)==gateDeleted && editor_.outline==0 && editor_.point==0 && editor_.gate==0 && geometry_.revision==changedSelectionRevision+1 && editor_.generated->surfaces[0].data()==finalSurfaces,"Material-only history restored selection without refreshing its overlay or rebuilt road storage."); SaveTrackProject(path);
+    std::ofstream(options_.session/"TrackDeletionVerification.txt")<<"Routed selected point/checkpoint/finish deletion, cancelled press and partial numeric cancellation passed\nExact authored controls/knots/weights/order/payload/assets and selection restored by undo/redo\nCurve changes cleared road/Drive; gate changes kept sampled road and validated remaining race placement\nPending gate form blocked point deletion; gate deletion discarded only unapplied form\nMissing gates/cubic minimum disabled clicks added no history, dirty state or geometry change\nProduction save/reload, prior dirty state and Drive-hidden-command guards passed\nPhysical input/global clipboard/actual notifications/display matching/power: pending\n";
     trackPath_.clear();
 }
 void App::TestUiTransactions()

@@ -20,6 +20,8 @@ Periodic knots use one purpose-specific KnotVector control in the same input, fo
 
 Placed checkered lines/checkpoints use the existing Number and Button controls. Four bounded numeric values form one optional GatePlacement draft; the planar domain validates endpoints before the application changes authored data/history. Gate edits preserve sampled road boundaries; checkered geometry and selected-gate overlays refresh separately. Checkpoints keep their authored ordering. CanDrive uses the existing race/vehicle-footprint validation when the Mode menu opens, rather than repeating asset evaluation while driving or hovering. No extra idle deadline, file-format field or widget kind is introduced.
 
+Selected point/gate deletion uses two existing Button controls and planar Editor transactions. Point deletion resets uniform knots and invalidates generated surfaces; gate deletion retains sampled surfaces while updating checkered mesh/gate overlays and race readiness. Track history additionally records four selection indices, restores them on undo/redo and rolls them back with rejected edits. Indices clamp to valid surviving elements or the empty selection. A material-only history entry refreshes the overlay if its recorded selection differs, while unchanged selection keeps the existing RGB rendering-revision guarantee. History remains bounded to 128 completed edits; no generated surface cache is stored in each entry.
+
 ## Stages
 
 1. Port tested domain/input/rendering modules and establish their regression tests.

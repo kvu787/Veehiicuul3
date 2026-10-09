@@ -52,6 +52,7 @@ private:
     void TestTrackDegrees();
     void TestTrackKnots();
     void TestGatePlacements();
+    void TestTrackDeletion();
     void TestUiTransactions();
     void TestProductionLoop();
     void TestWorkflow();

@@ -50,6 +50,7 @@ private:
     void OpenTrackProject(const std::filesystem::path& path);
     void TestTrackColors();
     void TestTrackDegrees();
+    void TestTrackKnots();
     void TestUiTransactions();
     void TestProductionLoop();
     void TestWorkflow();

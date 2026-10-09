@@ -97,12 +97,19 @@ void TextAtlas::Label(const std::wstring& text,float x,float y,Color c,Ui::Rect 
 void TextAtlas::Paint(const Ui::State& ui,const std::wstring& status)
 {
     const Ui::Rect all{0,0,Ui::Width,Ui::Height};
-    auto value=[&](const Ui::Control& c) { if(c.id==ui.focus && c.kind==Ui::Kind::Number) return ui.edit; std::wostringstream s; s<<std::setprecision(12)<<c.value; return s.str(); };
+    auto field=[](const Ui::Control& c) { return c.kind==Ui::Kind::Number || c.kind==Ui::Kind::KnotVector; };
+    auto start=[&](const Ui::Control& c) { return c.kind==Ui::Kind::KnotVector && c.id==ui.focus && ui.caret>24 ? ui.caret-24 : size_t{0}; };
+    auto value=[&](const Ui::Control& c) {
+        if(c.kind==Ui::Kind::KnotVector) return (c.id==ui.focus ? ui.edit : c.text).substr(start(c),64);
+        if(c.id==ui.focus && c.kind==Ui::Kind::Number) return ui.edit;
+        std::wostringstream s; s<<std::setprecision(12)<<c.value; return s.str();
+    };
+    auto prefix=[&](const Ui::Control& c) { const auto first=start(c); return ui.edit.substr(first,ui.caret-first); };
     // Bound numeric-string growth and prewarm before any UVs are emitted.
     if(entries_.size()>300 || y_>1400) { entries_.clear(); std::fill(pixels_.begin(),pixels_.end(),uint8_t{0}); pixels_[0]=255; x_=y_=2; rowHeight_=0; ++data_.revision; }
     Text(status);
-    for(const auto& c:ui.controls) { Text(c.text); if(c.kind==Ui::Kind::Number) Text(value(c)); }
-    if(ui.Editing()) Text(ui.edit.substr(0,ui.caret));
+    for(const auto& c:ui.controls) { if(c.kind!=Ui::Kind::KnotVector) Text(c.text); if(field(c)) Text(value(c)); }
+    if(ui.Editing()) Text(prefix(*ui.Find(ui.focus)));
     data_.vertices.clear();
     Rectangle({0,0,2560,62},{.055f,.06f,.07f,1},all);
     Rectangle(ui.panel,{.085f,.09f,.105f,1},all);
@@ -125,17 +132,18 @@ void TextAtlas::Paint(const Ui::State& ui,const std::wstring& status)
         }
         else
         {
-            const auto text=c.kind==Ui::Kind::Number ? value(c) : c.text;
-            if(c.kind==Ui::Kind::Number && c.id==ui.focus && ui.caret!=ui.anchor) Rectangle({c.rect.x+6,c.rect.y+5,c.rect.w-12,c.rect.h-10},{.12f,.26f,.47f,1},clip);
+            const auto text=field(c) ? value(c) : c.text;
+            if(field(c) && c.id==ui.focus && ui.caret!=ui.anchor) Rectangle({c.rect.x+6,c.rect.y+5,c.rect.w-12,c.rect.h-10},{.12f,.26f,.47f,1},clip);
             const auto textClip=Ui::Intersect(c.rect,clip);
             float textX=c.rect.x+6;
-            if(c.kind==Ui::Kind::Number && c.id==ui.focus) { const auto prefix=Text(ui.edit.substr(0,ui.caret)); textX-=std::max(0.f,prefix.w-4-(c.rect.w-14)); }
+            if(field(c) && c.id==ui.focus) { const auto before=Text(prefix(c)); textX-=std::max(0.f,before.w-4-(c.rect.w-14)); }
             Label(text,textX,c.rect.y+7,textColor,textClip);
-            // Static caret: numeric editing never arms a periodic blink timer.
-            if(c.kind==Ui::Kind::Number && c.id==ui.focus)
+            // Static caret: editing never arms a periodic blink timer. Knot
+            // vectors rasterize a bounded window around it, not 2048 characters.
+            if(field(c) && c.id==ui.focus)
             {
-                const auto prefix=Text(ui.edit.substr(0,ui.caret));
-                Rectangle({textX+prefix.w-4,c.rect.y+5,1,c.rect.h-10},textColor,textClip);
+                const auto before=Text(prefix(c));
+                Rectangle({textX+before.w-4,c.rect.y+5,1,c.rect.h-10},textColor,textClip);
             }
         }
     }

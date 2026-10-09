@@ -18,6 +18,11 @@ int main()
         Ui::Visibility visibility;Check(visibility.Blocked(),"Hidden startup considered visible");visibility.shown=true;Check(!visibility.Blocked(),"Visible state blocked");
         for(bool* signal:{&visibility.sessionAvailable,&visibility.desktopAvailable,&visibility.displayOn}) { *signal=false;Check(visibility.Blocked(),"Unavailable platform signal ignored");*signal=true; }
         visibility.cloaked=true;Check(visibility.Blocked(),"Cloaking ignored");visibility.cloaked=false;visibility.suspended=true;Check(visibility.Blocked(),"Suspension ignored");
+        Ui::State knots; Ui::Control vector;vector.id=4;vector.kind=Ui::Kind::KnotVector;vector.rect={12,0,404,38};vector.text=L"0 1 2 3 4";knots.Begin();knots.Add(vector);knots.Finish(100);
+        knots.Down(20,75);knots.Replace(L"-1,+0\n0\t1 1 2e0");Check(knots.edit==L"-1,+0 0 1 1 2e0","Knot paste/selection normalization failed");
+        const auto draft=knots.edit;auto commit=knots.Commit();Check(commit.size()==1 && commit[0].kind==Ui::ActionKind::CommitKnots && commit[0].text==draft && knots.Editing(),"Vector cleared before atomic application validation");
+        knots.Home(false,false);knots.Left(true,true);knots.Replace(L"0");Check(knots.edit.front()==L'0',"Knot caret/selection editing failed");knots.Home(true,false);knots.Text(L'\r');Check(knots.caret==knots.edit.size(),"Enter character mutated vector text");
+        knots.SelectAll();knots.Replace(std::wstring(2048,L'0'));Check(knots.edit.size()==2048,"Full bounded vector replacement rejected due to prior selected text length");const auto full=knots.edit;knots.Text(L'1');Check(knots.edit==full,"Knot input exceeded buffer bound");knots.SelectAll();knots.Replace(std::wstring(2049,L'0'));Check(knots.edit==full,"Oversized paste partially replaced knot text");knots.Cancel();Check(!knots.Editing() && knots.edit.empty(),"Knot cancel retained draft/focus");
         std::cout<<"Custom UI numeric, clipping, scrolling, centered mapping, startup policy and scheduling passed.\n"; return 0;
     }
     catch(const std::exception& e) { std::cerr<<e.what()<<'\n';return 1; }

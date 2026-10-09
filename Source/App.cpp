@@ -21,6 +21,7 @@ enum Id { ModeMenu=1,FileMenu,UndoAction,RedoAction,FrameAction,CageAction,QuitA
 constexpr int ObjectFirst=1000,MaterialFirst=1100,OutlineFirst=1200,PointFirst=1300,DecorFirst=1400,SliderFirst=2000,PaintFirst=2100,TransformFirst=2200;
 constexpr int OutlineColorFirst=3100,OutlineColorSliderFirst=3110;
 constexpr int OutlineDegree=3120;
+constexpr int OutlineKnots=3130,ApplyKnots=3131,CancelKnots=3132;
 bool OutlineColorSlider(int id) { return id>=OutlineColorSliderFirst && id<OutlineColorSliderFirst+3; }
 std::wstring Wide(const std::string& s)
 {
@@ -164,6 +165,15 @@ void App::Interface()
             const auto& curve=editor_.track.track.outlines[static_cast<size_t>(editor_.outline)];
             label(L"Degree changes shape; resets knots.");
             number(OutlineDegree,L"NURBS degree",curve.degree,1,static_cast<double>(std::min<size_t>(Racing2D::MaximumNurbsDegree,curve.controls.size()-1)));
+            label(L"Periodic knots: "+std::to_wstring(curve.knots.size())+L" values");
+            label(L"N = "+std::to_wstring(curve.controls.size())+L" controls; values within +/-100000");
+            label(L"Spaces/commas. Enter applies.");
+            label(L"Esc / Cancel discards the draft.");
+            label(L"Count = N + 2*degree + 1");
+            label(L"Period = k[N+degree] - k[degree]");
+            label(L"Repeat: k[i+N] = k[i] + period");
+            Ui::Control knots; knots.id=OutlineKnots; knots.kind=Ui::Kind::KnotVector; knots.rect={12,y,404,38}; knots.text=Wide(Racing2D::FormatKnots(curve.knots)); ui_.Add(knots); y+=44;
+            button(ApplyKnots,L"Apply knot vector"); button(CancelKnots,L"Cancel knot edit",ui_.focus==OutlineKnots);
             label(L"Surface color (unlit sRGB)");
             const wchar_t* names[]={L"Red",L"Green",L"Blue"};
             for(int i=0;i<3;++i)
@@ -216,6 +226,23 @@ void App::Actions(const std::vector<Ui::Action>& actions)
             POINT point{}; bool restore=!options_.hidden && !options_.smoke;
             try { point=SliderPoint(); } catch(const std::invalid_argument&) { restore=false; }
             slider_=0; relative_.End(point,restore); if(color) Redraw(); else Change(false);
+        }
+        else if(a.kind==Ui::ActionKind::CommitKnots)
+        {
+            try
+            {
+                std::string input; input.reserve(a.text.size());
+                for(auto ch:a.text) { if(ch<0 || ch>127) throw std::invalid_argument("Knot text must use ASCII decimal/scientific numbers."); input.push_back(static_cast<char>(ch)); }
+                const auto result=editor_.SetOutlineKnots(input); ui_.Cancel();
+                if(result==Editor::KnotEdit::Unchanged) { Redraw(); status_=L"Knots unchanged; authored state and built surfaces kept."; }
+                else
+                {
+                    modifiedTrack_=true;
+                    if(result==Editor::KnotEdit::ChangedBoundary) { Change(); status_=L"Knots applied: curve shape/sampling changed; points, weights and colors kept. Build surfaces before Drive."; }
+                    else { Redraw(); status_=L"Knots applied; sampled boundaries unchanged, built geometry retained. Authored values changed; save to persist."; }
+                }
+            }
+            catch(const std::invalid_argument& e) { ui_.invalid=true; status_=L"Knots rejected: "+Wide(e.what())+L" Previous track kept; edit the vector or press Esc."; Redraw(); }
         }
         else Command(a.id,a.value);
     }
@@ -272,6 +299,8 @@ void App::Command(int id,double value)
         else { Redraw(); status_=L"Degree unchanged; existing knots preserved."; }
         return;
     }
+    else if(id==ApplyKnots) { if(ui_.focus==OutlineKnots) Actions(ui_.Commit()); else Redraw(); return; }
+    else if(id==CancelKnots) { Actions(ui_.Cancel()); Redraw(); return; }
     else if(id>=OutlineColorFirst && id<OutlineColorFirst+3)
     {
         editor_.PreviewOutlineColor(static_cast<unsigned>(id-OutlineColorFirst),value);
@@ -522,6 +551,11 @@ void App::Pointer(UINT message,float x,float y,WPARAM buttons)
     if(slider_ && message!=WM_LBUTTONUP) return;
     if(message==WM_LBUTTONDOWN)
     {
+        if(ui_.Editing() && ui_.Find(ui_.focus)->kind==Ui::Kind::KnotVector)
+        {
+            if(ui_.Hit(x,y)==CancelKnots) Actions(ui_.Cancel());
+            else { Actions(ui_.Commit()); if(ui_.Editing()) return; }
+        }
         Actions(ui_.Down(x,y));
         if(ui_.capture || ui_.Editing()) { if(ui_.capture && !relative_.Active() && !options_.smoke && !options_.hidden) SetCapture(window_); Redraw(); return; }
         menu_=0;
@@ -588,7 +622,7 @@ void App::Key(UINT key)
         {
             const auto selection=ui_.Selected(); if(!selection.empty() && OpenClipboard(window_)) { const auto bytes=(selection.size()+1)*sizeof(wchar_t); auto memory=GlobalAlloc(GMEM_MOVEABLE,bytes); if(memory) { if(auto* data=GlobalLock(memory)) { std::memcpy(data,selection.c_str(),bytes); GlobalUnlock(memory); EmptyClipboard(); if(!SetClipboardData(CF_UNICODETEXT,memory)) GlobalFree(memory); } else GlobalFree(memory); } CloseClipboard(); if(key=='X') ui_.Erase(true); }
         }
-        else if(ctrl && key=='V' && OpenClipboard(window_)) { auto handle=GetClipboardData(CF_UNICODETEXT); if(handle) { const auto* data=static_cast<const wchar_t*>(GlobalLock(handle)); if(data) { const auto bound=GlobalSize(handle)/sizeof(wchar_t); size_t length=0; while(length<bound && length<128 && data[length]) ++length; ui_.Replace(std::wstring(data,length)); GlobalUnlock(handle); } } CloseClipboard(); }
+        else if(ctrl && key=='V' && OpenClipboard(window_)) { auto handle=GetClipboardData(CF_UNICODETEXT); if(handle) { const auto* data=static_cast<const wchar_t*>(GlobalLock(handle)); if(data) { const auto bound=GlobalSize(handle)/sizeof(wchar_t); size_t length=0; while(length<bound && length<=ui_.EditLimit() && data[length]) ++length; ui_.Replace(std::wstring(data,length)); GlobalUnlock(handle); } } CloseClipboard(); }
         Redraw(); return;
     }
     if(ctrl && (key=='Z' || key=='Y')) Command(key=='Y' ? RedoAction : UndoAction);
@@ -685,19 +719,19 @@ LRESULT App::Message(UINT message,WPARAM wparam,LPARAM lparam)
     case WM_INPUT:RawMouse(reinterpret_cast<HRAWINPUT>(lparam));return DefWindowProcW(window_,message,wparam,lparam);
     case WM_KEYDOWN:if(wparam<256) held_[wparam]=true; Key(static_cast<UINT>(wparam)); return 0;
     case WM_KEYUP:if(wparam<256) held_[wparam]=false;return 0;
-    case WM_CHAR:if(ui_.Editing() && !(GetKeyState(VK_CONTROL)&0x8000)) { ui_.Text(static_cast<wchar_t>(wparam)); Change(false); } return 0;
+    case WM_CHAR:if(ui_.Editing() && !(GetKeyState(VK_CONTROL)&0x8000)) { ui_.Text(static_cast<wchar_t>(wparam)); Redraw(); } return 0;
     case WM_MOUSEWHEEL:
     {
         if(slider_) return 0;
         POINT p{GET_X_LPARAM(lparam),GET_Y_LPARAM(lparam)}; ScreenToClient(window_,&p); const auto point=presentation_.ClientPoint(static_cast<float>(p.x),static_cast<float>(p.y));
-        if(point) { const auto x=(*point)[0],y=(*point)[1]; if(ui_.panel.Contains(x,y)) { if(ui_.Wheel(static_cast<float>(GET_WHEEL_DELTA_WPARAM(wparam)))) Change(false); } else if(view_.Contains(x,y)) { ViewCamera().Zoom(static_cast<float>(GET_WHEEL_DELTA_WPARAM(wparam))); Change(false); } } return 0;
+        if(point) { const auto x=(*point)[0],y=(*point)[1]; if(ui_.panel.Contains(x,y)) { if(ui_.Wheel(static_cast<float>(GET_WHEEL_DELTA_WPARAM(wparam)))) Redraw(); } else if(view_.Contains(x,y)) { ViewCamera().Zoom(static_cast<float>(GET_WHEEL_DELTA_WPARAM(wparam))); Change(false); } } return 0;
     }
     case WM_MOUSEMOVE:case WM_LBUTTONDOWN:case WM_LBUTTONUP:case WM_RBUTTONDOWN:case WM_RBUTTONUP:case WM_MBUTTONDOWN:case WM_MBUTTONUP:
     {
         const float x=static_cast<float>(GET_X_LPARAM(lparam)),y=static_cast<float>(GET_Y_LPARAM(lparam)); auto point=presentation_.ClientPoint(x,y);
         if(point) Pointer(message,(*point)[0],(*point)[1],wparam);
         else if(GetCapture()==window_ || ui_.capture) { const auto image=presentation_.Image(); Pointer(message,x-image.x,y-image.y,wparam); }
-        else if(ui_.hover) { ui_.hover=0; Change(false); }
+        else if(ui_.hover) { ui_.hover=0; Redraw(); }
         return 0;
     }
     case WM_DPICHANGED:case WM_DISPLAYCHANGE:
@@ -752,7 +786,7 @@ void App::TestWorkflow()
     Command(NewPrimitive); Command(CopyPaint); editor_.model.selection.mode=SelectionMode::Face; editor_.model.selection.face=0; Command(AssignPaint); Command(PaintFirst,.7); Command(ExtrudeAction); Command(RefineAction);
     SaveScene(editor_.model.scene,options_.session/"TwoPaint.modeler"); ExportMesh(editor_.model.scene,options_.session/"TwoPaint.h");
     const auto authored=SerializeScene(editor_.model.scene); Draw(!options_.hidden); renderer_.Capture(options_.session/"Model2560x1440.bmp");
-    Mode(EditorMode::TrackBuilder); TestTrackColors(); TestTrackDegrees(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
+    Mode(EditorMode::TrackBuilder); TestTrackColors(); TestTrackDegrees(); TestTrackKnots(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
     SaveTrack(editor_.track,options_.session/"ExampleCircuit.track");
     Mode(EditorMode::Drive); for(int i=0;i<120;++i) { Tick(1./120,true); if(i%30==0) Draw(!options_.hidden); }
     Draw(!options_.hidden); renderer_.Capture(options_.session/"Drive2560x1440.bmp");
@@ -891,6 +925,66 @@ void App::TestTrackDegrees()
     Require(!modifiedTrack_ && SerializeTrack(editor_.track)==changed && SerializeScene(editor_.model.scene)==model,"Rebuilt degree Drive transition changed clean authored state.");
     ui_.scroll=800; Draw(!options_.hidden); renderer_.Capture(options_.session/"OutlineDegree2560x1440.bmp");
     std::ofstream(options_.session/"OutlineDegreeVerification.txt")<<"Routed numeric no-op/cancel/invalid/fractional/scientific degree editing passed\nNo-op retained noncanonical periodic knots and rendering geometry revision\nDegree commit changed shape, regenerated uniform periodic knots, preserved controls/weights/colors/assets/placements\nGeometry invalidated; Drive disabled/rejected until successful surface build\nUndo/redo and clean save/reload/rebuilt Drive passed\nPhysical input and real display association: pending\n";
+    trackPath_.clear();
+}
+void App::TestTrackKnots()
+{
+    Command(ExampleTrack); editor_.outline=0; editor_.point=5;
+    editor_.TrackEdit([&] { editor_.track.track.outlines[0].controls[0].weight=.81; }); editor_.BuildTrack(); Change();
+    const auto path=options_.session/"OutlineKnots.track"; SaveTrackProject(path);
+    const auto original=SerializeTrack(editor_.track),model=SerializeScene(editor_.model.scene),vehicle=SerializeScene(editor_.track.vehicle);
+    const auto oldKnots=editor_.track.track.outlines[0].knots; const auto geometry=editor_.generated->surfaces[0].data();
+    auto key=[&](UINT value) { SendMessageW(window_,WM_KEYDOWN,value,0); SendMessageW(window_,WM_KEYUP,value,0); };
+    auto reveal=[&](int id) {
+        Interface(); const auto* c=ui_.Find(id); Require(c && c->enabled,"Knot workflow control unavailable.");
+        if(c->clip.y==ui_.panel.y) { ui_.scroll+=c->rect.y-ui_.panel.y; Interface(); c=ui_.Find(id); }
+        return Ui::Intersect(c->rect,c->clip);
+    };
+    auto click=[&](int id) { const auto r=reveal(id),image=presentation_.Image(); const auto p=MAKELPARAM(static_cast<SHORT>(r.x+8+image.x),static_cast<SHORT>(r.y+4+image.y)); Message(WM_LBUTTONDOWN,MK_LBUTTON,p); Message(WM_LBUTTONUP,0,p); };
+    auto edit=[&](const std::string& text) {
+        if(ui_.Editing()) key(VK_ESCAPE); click(OutlineKnots); key(VK_BACK);
+        for(auto ch:text) SendMessageW(window_,WM_CHAR,static_cast<unsigned char>(ch),0);
+        Require(ui_.edit==Wide(text),"Routed knot character/edit selection failed.");
+    };
+    Draw(!options_.hidden); const auto revision=geometry_.revision;
+    std::string scientific; for(auto k:oldKnots) { if(!scientific.empty()) scientific+=','; scientific+=std::to_string(static_cast<unsigned>(k))+"e0"; }
+    edit(scientific); key(VK_RETURN); Draw(!options_.hidden);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==original && editor_.generated->surfaces[0].data()==geometry && geometry_.revision==revision,"Equivalent routed knot vector dirtied/rebuilt clean authoring.");
+    auto scaled=oldKnots; for(auto& k:scaled) k*=2;
+    edit(Racing2D::FormatKnots(scaled)); click(ApplyKnots); Draw(!options_.hidden);
+    const auto parameterOnly=SerializeTrack(editor_.track);
+    Require(modifiedTrack_ && editor_.generated->surfaces[0].data()==geometry && geometry_.revision==revision && editor_.point==5,"Exactly unchanged sampled boundaries rebuilt rendering geometry or changed selection.");
+    click(UndoAction); Draw(!options_.hidden); Require(modifiedTrack_ && SerializeTrack(editor_.track)==original && editor_.generated->surfaces[0].data()==geometry && geometry_.revision==revision,"Parameter-only routed undo/draw lost knots, dirty state or geometry reuse.");
+    click(RedoAction); Draw(!options_.hidden); Require(SerializeTrack(editor_.track)==parameterOnly && editor_.generated->surfaces[0].data()==geometry && geometry_.revision==revision,"Parameter-only routed redo/draw rebuilt geometry.");
+    click(UndoAction); SaveTrackProject(path);
+    auto changed=oldKnots; const auto n=editor_.track.track.outlines[0].controls.size();
+    for(size_t i=1;i<changed.size();++i) changed[i]=changed[i-1]+(i%n==4 ? .5 : 1.);
+    auto badOrder=changed,badExtension=changed,badRange=changed; badOrder[5]=badOrder[4]-1; badExtension.back()+=.25; badRange.back()=100001;
+    for(const auto& invalid:std::vector<std::string>{"0 1 2","1e999","1,,2",Racing2D::FormatKnots(badOrder),Racing2D::FormatKnots(badExtension),Racing2D::FormatKnots(badRange),Racing2D::FormatKnots(std::vector<double>(changed.size(),0))})
+    {
+        edit(invalid); key(VK_RETURN); Draw(!options_.hidden);
+        Require(ui_.invalid && ui_.Editing() && ui_.edit==Wide(invalid) && !modifiedTrack_ && SerializeTrack(editor_.track)==original && editor_.generated->surfaces[0].data()==geometry && geometry_.revision==revision,"Rejected routed knot vector lost draft or mutated authoring/rendering geometry.");
+        click(OutlineFirst+1); Require(editor_.outline==0 && ui_.Editing() && ui_.invalid,"Invalid knot draft switched selected outline or clicked through."); key(VK_ESCAPE);
+    }
+    edit(Racing2D::FormatKnots(changed)); Draw(!options_.hidden); click(CancelKnots); Draw(!options_.hidden);
+    Require(!ui_.Editing() && !modifiedTrack_ && SerializeTrack(editor_.track)==original && geometry_.revision==revision,"Cancel button committed knot draft or rebuilt geometry.");
+    edit(Racing2D::FormatKnots(changed)); SendMessageW(window_,WM_KILLFOCUS,0,0); Draw(!options_.hidden);
+    Require(!ui_.Editing() && !modifiedTrack_ && SerializeTrack(editor_.track)==original && geometry_.revision==revision,"Knot focus-loss cancel changed clean authoring.");
+    edit(Racing2D::FormatKnots(changed)); key(VK_RETURN); const auto authored=SerializeTrack(editor_.track);
+    Require(modifiedTrack_ && !editor_.generated && editor_.point==5 && status_.find(L"Build surfaces before Drive")!=std::wstring::npos,"Changed knot commit retained stale geometry or hid rebuild/shape semantics.");
+    Command(ModeMenu); Interface(); Require(!ui_.Find(DriveMode)->enabled,"Drive remained enabled after changed knots."); Command(ModeMenu);
+    bool rejected=false; try { Mode(EditorMode::Drive); } catch(const std::invalid_argument&) { rejected=true; }
+    Require(rejected && editor_.mode==EditorMode::TrackBuilder && SerializeTrack(editor_.track)==authored,"Drive accepted stale knot geometry or rejection mutated authored state.");
+    Draw(!options_.hidden); Require(geometry_.revision>revision,"Changed knot boundaries were classified as UI/material-only.");
+    click(UndoAction); Draw(!options_.hidden); Require(modifiedTrack_ && SerializeTrack(editor_.track)==original && !editor_.generated,"Knot undo failed to restore exact original authoring.");
+    click(RedoAction); Require(SerializeTrack(editor_.track)==authored && !editor_.generated,"Knot redo failed or reused stale boundaries.");
+    edit(Racing2D::FormatKnots(oldKnots)); key(VK_ESCAPE); Require(modifiedTrack_ && SerializeTrack(editor_.track)==authored,"Knot cancel cleared earlier dirty changes.");
+    SaveTrackProject(path); Command(OutlineColorFirst,.2); OpenTrackProject(path);
+    Require(!modifiedTrack_ && editor_.generated && SerializeTrack(editor_.track)==authored,"Explicit knot production save/reload failed.");
+    Mode(EditorMode::Drive); Tick(.02,true); Mode(EditorMode::TrackBuilder);
+    Require(!modifiedTrack_ && SerializeTrack(editor_.track)==authored && SerializeScene(editor_.model.scene)==model && SerializeScene(editor_.track.vehicle)==vehicle,"Rebuilt knot Drive transition changed clean authoring/assets.");
+    reveal(OutlineKnots); Draw(!options_.hidden); renderer_.Capture(options_.session/"OutlineKnots2560x1440.bmp");
+    std::ofstream(options_.session/"OutlineKnotVerification.txt")<<"Own-window routed pointer/character/key input and Apply/Enter passed\nEquivalent vector no-op and exact sampled-boundary reuse: retained generated storage/rendering revision through undo/redo draws\nLength/nonmonotone/periodic-extension/domain/bound/nonfinite-overflow rejection retained editable draft and all prior state\nInvalid draft blocked selection click-through; Escape/Cancel/focus-loss and prior dirty state passed\nChanged boundaries invalidated; Drive disabled/rejected until successful build\nPoints/weights/degree/colors/assets/placements preserved; exact undo/redo and production save/reload/rebuilt Drive passed\nPhysical input, global clipboard delivery and real display association: pending\n";
     trackPath_.clear();
 }
 void App::TestUiTransactions()

@@ -16,6 +16,8 @@ Pointer-driven buttons, lists, menus, toggle actions, clipping/scroll synchroniz
 
 The user explicitly omitted Tab navigation and accessibility work. Do not add Tab/Shift+Tab traversal or UI Automation providers in this milestone. General keyboard navigation, access-key infrastructure, IME/rich text, docking, themes and animation frameworks are deliberately deferred. Numeric fields accept ASCII numbers and essential selection/clipboard/editing keys. Names remain source-provided in this milestone.
 
+Periodic knots use one purpose-specific KnotVector control in the same input, focus, clipping, scrolling and DirectWrite/DX12 path as numeric fields. Its bounded 2048-character draft emits an application action, with periodic parsing/validation kept in the planar domain and transactional application logic. Invalid drafts remain editable and block selection click-through; cancellation never touches authored state. Only a short caret-following text window is rasterized. This does not add a general text editor or table framework. Essential clipboard operations remain Win32 facilities; automatic tests exercise the accepted text/editing paths without modifying the user's global clipboard.
+
 ## Stages
 
 1. Port tested domain/input/rendering modules and establish their regression tests.

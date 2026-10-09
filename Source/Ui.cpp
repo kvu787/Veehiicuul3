@@ -64,9 +64,11 @@ std::vector<Action> State::Down(float x,float y)
     }
     const auto* c=Find(id); if(!c) { focus=0; return actions; }
     focus=id; invalid=false;
-    if(c->kind==Kind::Number)
+    if(c->kind==Kind::Number || c->kind==Kind::KnotVector)
     {
-        std::wostringstream s; s<<std::setprecision(17)<<c->value; edit=s.str(); SelectAll(); Reveal(*c);
+        if(c->kind==Kind::KnotVector) edit=c->text;
+        else { std::wostringstream s; s<<std::setprecision(17)<<c->value; edit=s.str(); }
+        SelectAll(); Reveal(*c);
     }
     else if(c->kind==Kind::Slider) { capture=id; actions.push_back({ActionKind::BeginSlider,id,c->value}); }
     else capture=id;
@@ -81,11 +83,15 @@ std::vector<Action> State::Up(float x,float y)
     if(Hit(x,y)==id) return {{ActionKind::Click,id}};
     return {};
 }
-bool State::Editing() const { const auto* c=Find(focus); return c && c->kind==Kind::Number && c->enabled; }
+bool State::Editing() const { const auto* c=Find(focus); return c && (c->kind==Kind::Number || c->kind==Kind::KnotVector) && c->enabled; }
+size_t State::EditLimit() const { const auto* c=Find(focus); return c && c->kind==Kind::KnotVector ? 2048 : 128; }
 std::vector<Action> State::Commit()
 {
     if(!Editing()) return {};
     const auto id=focus; const auto* c=Find(id);
+    // The application validates the whole periodic vector before clearing this
+    // draft. Invalid input remains editable; clicking elsewhere is intercepted.
+    if(c->kind==Kind::KnotVector) return {{ActionKind::CommitKnots,id,0,edit}};
     wchar_t* end=nullptr; const auto value=std::wcstod(edit.c_str(),&end);
     if(edit.empty() || !end || *end || !std::isfinite(value) || value<c->minimum || value>c->maximum) { invalid=true; return {}; }
     focus=0; edit.clear(); invalid=false;
@@ -109,11 +115,16 @@ void State::RemoveSelection()
 }
 void State::Replace(std::wstring value)
 {
-    if(!Editing() || value.size()+edit.size()>128) return;
-    for(auto c:value) if(!((c>=L'0' && c<=L'9') || c==L'.' || c==L'-' || c==L'+' || c==L'e' || c==L'E')) return;
+    if(!Editing() || value.size()+edit.size()-(std::max(caret,anchor)-std::min(caret,anchor))>EditLimit()) return;
+    const bool knots=Find(focus)->kind==Kind::KnotVector;
+    for(auto& c:value)
+    {
+        if(knots && (c==L'\r' || c==L'\n' || c==L'\t')) c=L' ';
+        if(!((c>=L'0' && c<=L'9') || c==L'.' || c==L'-' || c==L'+' || c==L'e' || c==L'E' || (knots && (c==L' ' || c==L',')))) return;
+    }
     RemoveSelection(); edit.insert(caret,value); caret+=value.size(); anchor=caret; invalid=false;
 }
-void State::Text(wchar_t value) { Replace(std::wstring(1,value)); }
+void State::Text(wchar_t value) { if(value>=L' ') Replace(std::wstring(1,value)); }
 void State::Erase(bool backward)
 {
     if(!Editing()) return;

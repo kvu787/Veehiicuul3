@@ -18,7 +18,7 @@ inline Rect Intersect(Rect a,Rect b)
     const float x=std::max(a.x,b.x),y=std::max(a.y,b.y);
     return {x,y,std::max(0.f,std::min(a.x+a.w,b.x+b.w)-x),std::max(0.f,std::min(a.y+a.h,b.y+b.h)-y)};
 }
-enum class Kind { Label,Button,Number,Slider };
+enum class Kind { Label,Button,Number,Slider,KnotVector };
 struct Control
 {
     int id=0;
@@ -28,8 +28,8 @@ struct Control
     bool enabled=true,selected=false;
     double value=0,minimum=0,maximum=1;
 };
-enum class ActionKind { Click,Commit,BeginSlider,EndSlider,CancelSlider };
-struct Action { ActionKind kind; int id; double value=0; };
+enum class ActionKind { Click,Commit,BeginSlider,EndSlider,CancelSlider,CommitKnots };
+struct Action { ActionKind kind; int id; double value=0; std::wstring text; };
 class State
 {
 public:
@@ -60,6 +60,7 @@ public:
     void SelectAll();
     std::wstring Selected() const;
     bool Editing() const;
+    size_t EditLimit() const;
 private:
     float scrollAnchor_=0,pointerAnchor_=0;
     void Reveal(const Control& c);

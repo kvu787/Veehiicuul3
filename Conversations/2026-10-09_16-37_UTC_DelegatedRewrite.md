@@ -372,3 +372,29 @@ The V2 center/degree-heading/width contract now uses existing custom numeric con
 Release 35/35, Debug 33/33, copied hidden/displayed hardware/WARP and actual CMD launcher checks passed. All 146 hashes match; 147 files are read-only; six older snapshots remain intact. NE18NZ2 checks preserved foreground/focus/capture/cursor and recorded zero idle presents. No process or delivery blocker remains.
 
 Remaining bindings include selected control-point/gate deletion and camera-follow. Physical input/clipboard, real notifications/display association and electrical power remain unverified. References are unchanged; all new commits remain local.
+
+## Parent selected deletion delegation (verbatim)
+
+The gate-editing build has been announced. Continue existing workflow parity with selected control-point and gate deletion using the minimal UI, after verifying the V2 contract. Preserve authored data and selection consistency, minimum valid curve constraints, exact undo/redo and dirty/save behavior, and appropriate surface/Drive invalidation. Avoid new UI framework features. Test domain and actual routed commands, then deliver a verified immutable snapshot and identify the next remaining binding. Keep reference repositories read-only and GUI checks on NE18NZ2 exclusively. Continue code/noninteractive tests if locked; all commits local.
+
+## Assistant deletion contract progress (verbatim)
+
+I’ll check V2’s deletion rules, then bind selected control-point and gate deletion to the existing controls. I’ll verify selection, history, dirty state and Drive behavior before packaging the next build.
+
+V2 deletes a selected point, resets its knots to uniform spacing and keeps at least three controls—or degree+1 when larger. Gate deletion clears the checkered-line flag or removes only the selected checkpoint. I’ll preserve those rules and record selection in track history so undo restores the deleted target.
+
+## Parent frozen gate review and priority correction (verbatim)
+
+Independent review found one P2 in frozen gate build 0ca275b38da4: Editor.cpp:169 uses exact floating-point equality for wrapped-heading no-ops. At roughly 30.1 degrees, adding 360 normalizes to a slightly different double, rewriting endpoints, adding history and dirtying the track. Existing tests only use a cardinal heading. Correct full-turn equivalence robustly without swallowing meaningful tiny edits, and add non-cardinal domain plus routed tests for unchanged exact endpoints, history, dirty state and rendering revision. Include this fix in the next verified snapshot, prioritizing it over the current deletion parity work if necessary. Other reviewed gate paths and evidence were consistent.
+
+## Assistant correction and deletion verification progress (verbatim)
+
+The independent review found a wrapped-heading no-op defect at non-cardinal angles. I’ll replace the exact remainder comparison with a check for the rounded full-turn result, and test that a distinct tiny edit still commits. This fix will be included in the deletion build.
+
+The wrapped-heading correction passed all 33 noninteractive checks. Non-cardinal full turns now preserve exact endpoints, history, clean state and rendering revision; the tests also confirm that a distinct tiny edit commits. I’ll commit that fix separately, then finish deletion routing and tests.
+
+The deletion code now preserves the surviving controls, weights, gate order and assets. Point deletion resets knots and clears built surfaces; gate deletion keeps road surfaces and checks the remaining race setup. Routed tests are running for partial-field cancellation, disabled buttons, selection restoration, save/reload and Drive guards.
+
+The deletion tests passed. Recording selection in history also means a color-only Undo must refresh the overlay when it restores a different selected target. I’ve added that refresh and a regression check that road storage stays unchanged; the full rerun is underway.
+
+All 34 noninteractive checks now pass, including the selection-overlay regression and wrapped-heading correction. I’m committing the deletion domain and UI changes separately, then packaging the clean source with displayed NE18NZ2, Debug and copied-build checks.

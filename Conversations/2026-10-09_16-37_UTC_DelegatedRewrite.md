@@ -296,3 +296,29 @@ All 32 noninteractive checks passed, including hidden hardware/WARP runs. Routed
 ## Source checkpoint
 
 2b624f9 adds bounded decimal/scientific vector parsing and explicit periodic-extension checks, atomic selected-outline application, exact sampled-boundary reuse and focused domain tests. 3ce76b2 binds the single purpose-specific vector field, shared editing/clip/scroll/caret-window rendering and routed UI tests, with documentation of V2's actual contract. Existing Version 2 reading/persistence behavior is retained. The domain and UI changes are separate reviewable local commits. The following package is gated on committed-source Release/Debug and copied-build verification; the previous ready snapshot stays unchanged until those gates pass.
+
+## Assistant packaging progress (verbatim)
+
+All 34 committed-source Release checks passed, including displayed hardware/WARP checks on NE18NZ2. Debug and copied-build gates are still running. The previous ready build remains selected until packaging passes.
+
+## Parent progress and scope request (verbatim)
+
+Please share a short progress update with the current implementation/test stage and any blocker, then continue. Since inspection showed V2 has no direct knot-vector UI, describe this accurately as a small authoring addition, not recovered UI parity. Keep it bounded and prioritize the remaining existing mode functionality afterward.
+
+## Assistant ready notification and handoff (verbatim)
+
+The small knot-authoring addition is packaged and verified; Veehiicuul2 had no direct vector UI to recover. The ready build is `C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_19-41-56-142_9a275fa6dfa6`, source `9a275fa6dfa6cc9fbbee30d0f2192bde18ede2f0`. Release 34/34, Debug 32/32 and copied hardware/WARP gates passed. No blocker is open; I'm finishing the frozen-hash and launcher checks before handoff.
+
+The final launcher check passed. All 130 hashes match, all 131 files are read-only, older snapshots remain intact, and no test process is active. The next existing V2 workflow to bind is selecting and editing checkered-line/checkpoint center, heading and width.
+
+The small knot-authoring addition is verified and ready. Veehiicuul2 preserved saved knots but had no direct vector UI.
+
+`C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_19-41-56-142_9a275fa6dfa6`
+
+RunLatestBuild.cmd selects it. Source: 9a275fa6dfa6cc9fbbee30d0f2192bde18ede2f0. Domain/UI commits: 2b624f9 / 3ce76b2. Executable SHA-256: 66598B6927F4983825C1CCC74F1F8C8832C7B1C938FFEFCEEC8EC77D7D12D6D1.
+
+The bounded vector field applies atomically, retains rejected drafts, preserves points/weights/materials, and supports cancellation, history and persistence. Changed boundaries require rebuilding before Drive; exactly unchanged sampled boundaries retain geometry.
+
+Release 34/34, Debug 32/32, copied hidden/displayed hardware/WARP and actual CMD launcher checks passed. All 130 hashes match; 131 files are read-only; older snapshots are intact. NE18NZ2 tests preserved foreground/focus/capture and recorded zero idle presents. No process or delivery blocker remains.
+
+Physical input/global clipboard, real notifications/display association and electrical power remain unverified. Next existing mode binding: selected checkered-line/checkpoint center, heading and width editing. References remain unchanged; all new commits are local.

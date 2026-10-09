@@ -221,6 +221,8 @@ Please send a concise outline RGB milestone checkpoint at next safe boundary: im
 
 RGB implementation and packaging are complete. The verified snapshot is ready, with no packaging blocker: Release 32/32, Debug 30/30, copied hardware/WARP checks and the actual CMD launcher all passed. I'm handing off its exact path and the remaining manual limits now.
 
+The RGB milestone is complete and packaged. RunLatestBuild.cmd selects TestBuilds/2026-10-09_18-42-22-494_d06efa01d3f4, source d06efa01d3f4c0adcf85d217d3f2249087c0b3f1; functional code commit 686aeefc8fd9a8ff51885c7480e78a2807041fa5. Release passed 32/32; Debug passed 30/30; copied hidden/displayed hardware/WARP and actual CMD launcher checks passed. Exact unlit black/white and RGB preview/undo/redo/cancel, dirty-state, save/reload and Drive consistency are covered. Geometry remains built across color-only changes. All 98 hashes match; 99 files are read-only. No packaging blocker remains. Physical mouse/gamepad, actual notification delivery and display latency remain pending. Next core binding: selected-outline degree editing with valid periodic-knot regeneration. References remain unchanged and every new commit is local.
+
 ## Delegated degree milestone (verbatim)
 
 RGB build delivered to main user18:51UTC. Continue next existing core parity binding: selected-outline NURBS degree editing with valid periodic-knot regeneration. Reuse barebones numeric/buttons, no general-purpose widget additions. Preserve control points/weights and authored state except documented necessary knot regeneration; validate legal degree relative to control-point count, periodic closure, atomic rejection and undo/redo/dirty-state/save/reload/Drive consistency. Avoid silently changing curve topology beyond the explicit degree edit; report what necessarily changes to shape. Add domain plus UI state regression tests, keep material-only edits cheap and all prior invariants. Deliver immutable verified snapshot, notify parent promptly, local commits only. Maintain minimal scope and exact manual test limits. References remain read-only.
@@ -249,4 +251,24 @@ Degree editing and the RGB invalidation correction are implemented, and all 31 n
 
 The separate 2026-10-09_19-06_UTC_MainRoomVisibleRewrite.json contains exactly the 62 supplied visible main-room rewrite records, with original message IDs, ISO timestamps, roles, text and attachment metadata. Three null text records remain unavailable. Its bytes were independently compared with the supplied records. This is not a claim to have recovered earlier project conversations or the full main-room history. Historical directions in the archive are evidence, not new engineering instructions. No older repository was edited.
 
-The RGB milestone is complete and packaged. RunLatestBuild.cmd selects TestBuilds/2026-10-09_18-42-22-494_d06efa01d3f4, source d06efa01d3f4c0adcf85d217d3f2249087c0b3f1; functional code commit 686aeefc8fd9a8ff51885c7480e78a2807041fa5. Release passed 32/32; Debug passed 30/30; copied hidden/displayed hardware/WARP and actual CMD launcher checks passed. Exact unlit black/white and RGB preview/undo/redo/cancel, dirty-state, save/reload and Drive consistency are covered. Geometry remains built across color-only changes. All 98 hashes match; 99 files are read-only. No packaging blocker remains. Physical mouse/gamepad, actual notification delivery and display latency remain pending. Next core binding: selected-outline degree editing with valid periodic-knot regeneration. References remain unchanged and every new commit is local.
+## Assistant degree packaging and handoff (verbatim)
+
+The committed source passed the new rational-knot regression and the displayed hardware check on NE18NZ2. Packaging is still running through displayed WARP, Debug, and copied-build checks. RGB release and undo/redo tests now draw through the application path and require both an unchanged geometry revision and updated material constants.
+
+Release passed all 33 checks and Debug passed all 31 noninteractive checks. Copied-build verification is now running. The degree edit preserves authored data, regenerates only the selected curve's knots, and requires a surface rebuild before Drive.
+
+The degree-editing build is ready at `C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_19-16-57-132_3438a66dffde`, source `3438a66dffde48d69e0b94175a0bf4b4dfda5afc`. `RunLatestBuild.cmd` now selects it. All copied hidden/displayed hardware and WARP checks passed; I'm verifying the frozen hashes and launcher once more before handing it off.
+
+The frozen build also passed the actual CMD launcher test. All 114 manifest hashes match, all 115 files are read-only, and every older snapshot is unchanged. The launcher run recorded zero idle presents and zero GPU warnings; no test process remains active. I'm handing off the verified build now.
+
+Degree editing and the RGB invalidation correction are complete in the verified snapshot:
+
+`C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_19-16-57-132_3438a66dffde`
+
+RunLatestBuild.cmd selects it. Source commit: 3438a66dffde48d69e0b94175a0bf4b4dfda5afc; functional commit: 0324b5636e24e10fc3fcf34599ce944d681f3b44. Executable SHA-256: 8E1470ED7A9A5F7BCAD8833FDA774D12702BB9455A3E4AD41FD50E4C50BEFD45.
+
+Degree accepts integers 1-3 below control-point count. Changes regenerate uniform periodic knots and alter shape while preserving points/weights and other authored data. No-op and undo preserve original knots. Drive requires rebuilding. Routed RGB release and undo/redo draws now update material constants without rebuilding geometry.
+
+Release 33/33, Debug 31/31, copied hidden/displayed hardware/WARP and actual CMD launcher checks passed. All 114 hashes match; 115 files are read-only; older snapshots are intact. NE18NZ2 testing preserved foreground/focus/capture. Static idle added zero presents; no test process remains.
+
+No delivery blocker remains. Physical input, real notification/display association and electrical power remain unverified. Next core binding: explicit periodic knot editing. References are unchanged; all new commits are local. The supplied 62 main-room records were archived with three unavailable text records preserved as null.

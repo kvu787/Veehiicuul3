@@ -488,3 +488,25 @@ Release 74/74, Debug 76/76, copied hardware/WARP and actual CMD launcher checks 
 Next binding: per-mode sidebar scroll restoration. Physical input/clipboard, actual OS notifications/display association and electrical power remain unverified. References are unchanged; all new commits remain local.
 
 Earlier dialog and checker-mismatch evidence is preserved. The dialog's monitor/focus effect remains unknown; the new guard probes passed. Independent review cleared the earlier deletion/heading scope only.
+
+## Parent sidebar scroll binding request (verbatim)
+
+The camera-follow/guard snapshot has been announced. Continue the remaining per-mode sidebar scroll restoration binding. Inspect existing V2 behavior, retain separate positions for Model builder, Track builder and Drive, clamp when content shrinks, preserve pointer hit testing and clipping after restore, and avoid idle redraw loops or authored dirty/history changes. Use current minimal UI infrastructure, with routed wheel/mode-switch tests including partially visible controls and active drafts. Deliver a verified immutable snapshot, then report a concise remaining V2-to-V3 parity inventory so we can close the rewrite scope rather than invent new features. References remain read-only; tests only NE18NZ2; local commits only.
+
+## Assistant progress (verbatim)
+
+I'll inspect V2's scroll restoration behavior, then retain a separate sidebar position for each mode using the current UI state. I'll test clamping, clipping, hit routing and draft handling before packaging the next snapshot and updating the remaining parity inventory.
+
+V2 retains Model and Track scroll positions separately and restores Track after driving; its compact Drive panel starts at zero. I'll give V3 all three requested positions and clamp each to the current content. Restoring a position will also rebuild hit regions before the next pointer event.
+
+The scroll state is now separate for each mode. Wheel and scrollbar changes update control hit regions immediately, even before a frame is drawn. Mode-menu routing also keeps draft text while the menu is open, so a mode change can cancel it without first committing it. I'm testing those paths together.
+
+The new routed test caught an overlapping control ID: Drive's sidebar return button and the Mode popup row share an ID, and lookup selected the sidebar button even when the popup was on top. I'll align lookup with hit testing and rerun the test. The headless UI tests passed; no snapshot has been promoted.
+
+The Release noninteractive suite passed 72/72 after the lookup fix. The tests retain and execute both editors' existing redo entries, preserve clean state and generated road storage, and keep clamped wheel input from scheduling a frame. Debug is running now.
+
+The source audit also found legacy functions beyond scroll restoration: model duplicate/delete/rename and view presets, plus a few Track and project-replacement behaviors. I'll list those explicitly in the remaining parity inventory.
+
+Debug passed 76/76. The final regression adds a real sidebar deletion to check that content shrink clamps immediately, before another frame. Layout now refreshes after pointer releases and completed keyboard actions.
+
+The changes are committed locally. I'll package clean source next, then verify the copied hardware/WARP builds and launcher.

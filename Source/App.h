@@ -53,11 +53,12 @@ private:
     void TestTrackKnots();
     void TestGatePlacements();
     void TestTrackDeletion();
+    void TestCameraFollow();
     void TestUiTransactions();
     void TestProductionLoop();
     void TestWorkflow();
     int Tests();
-    Camera& ViewCamera() { return editor_.mode==EditorMode::ModelBuilder ? editor_.modelCamera : editor_.trackCamera; }
+    Camera& ViewCamera() { return editor_.ViewCamera(); }
     HINSTANCE instance_;
     HWND window_=nullptr;
     Display display_;

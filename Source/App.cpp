@@ -10,6 +10,7 @@
 #include <numbers>
 #include <limits>
 #include <thread>
+#include <tuple>
 
 namespace
 {
@@ -17,7 +18,7 @@ enum Id { ModeMenu=1,FileMenu,UndoAction,RedoAction,FrameAction,CageAction,QuitA
     ModelMode=20,TrackMode,DriveMode,NewCar=30,NewPrimitive,OpenProject,SaveFile,SaveAs,ExportFile,
     AddBox=40,AddPlane,AddCylinder,ObjectTarget=50,VertexTarget,FaceTarget,RefineAction,ExtrudeAction,CopyPaint,AssignPaint,ResetPaint,
     NewTrack=100,ExampleTrack,BuildTrack,SelectTool,OutlineTool,FinishOutline,CancelDraft,SpawnTool,FinishTool,CheckpointTool,DecorationTool,UseVehicle,UseDecoration,
-    RemoveOutline,RemoveCheckpoint,RemoveDecoration,RemovePoint,RemoveGate,
+    RemoveOutline,RemoveCheckpoint,RemoveDecoration,RemovePoint,RemoveGate,FollowCarAction,ResetCarAction,
     Speed=2300,PreviewLevel,EditStep,SpawnX=3000,SpawnY,SpawnHeading,VehicleScale,PointX,PointY,PointWeight,DecorX,DecorY,DecorHeading,DecorHeight,DecorScale,DeadzoneX,DeadzoneY };
 constexpr int ObjectFirst=1000,MaterialFirst=1100,OutlineFirst=1200,PointFirst=1300,DecorFirst=1400,SliderFirst=2000,PaintFirst=2100,TransformFirst=2200;
 constexpr int OutlineColorFirst=3100,OutlineColorSliderFirst=3110;
@@ -155,6 +156,7 @@ void App::Interface()
     else if(editor_.mode==EditorMode::TrackBuilder)
     {
         label(L"NURBS track"); button(NewTrack,L"New empty track"); button(ExampleTrack,L"Example circuit"); button(BuildTrack,L"Build surfaces");
+        button(FollowCarAction,editor_.following ? L"Follow the car: on" : L"Follow the car: off",true,editor_.following);
         label(L"Pointer tool");
         button(SelectTool,L"Select / move control point",true,editor_.tool==Editor::Tool::Select); button(OutlineTool,L"Draw outline (ground, road, islands)",true,editor_.tool==Editor::Tool::Outline);
         button(FinishOutline,L"Finish periodic cubic outline",editor_.draft.size()>=4); button(CancelDraft,L"Cancel outline / gate draft",!editor_.draft.empty() || editor_.gateStart.has_value());
@@ -215,6 +217,7 @@ void App::Interface()
     else
     {
         label(L"Drive"); const auto& car=editor_.race.State(); label(L"Laps: "+std::to_wstring(car.laps)); label(L"Next checkpoint: "+std::to_wstring(car.nextCheckpoint+1)); label(L"Speed: "+std::to_wstring(static_cast<int>(car.velocity.Length()))+L" m/s"); label(L"Boundary resets: "+std::to_wstring(car.collisions));
+        button(FollowCarAction,editor_.following ? L"Follow the car: on" : L"Follow the car: off",true,editor_.following); button(ResetCarAction,L"Reset car (R / X)");
         label(L"WASD / arrows: acceleration"); label(L"Space: brake   R: reset"); label(L"Right stick / left trigger / X"); button(TrackMode,L"Return to Track builder"); button(ModelMode,L"Return to Model builder");
     }
     ui_.Finish(y+8);
@@ -267,6 +270,7 @@ void App::Actions(const std::vector<Ui::Action>& actions)
 }
 void App::Mode(EditorMode mode)
 {
+    if(mode==editor_.mode) { Redraw(); return; }
     if(mode==EditorMode::Drive && gateDraft_) { status_=L"Apply or cancel the gate draft before Drive."; Redraw(); return; }
     Abort(); editor_.Mode(mode); ui_.scroll=0; ui_.focus=0; held_.fill(false); accumulator_=0; resetClock_=true;
     schedule_.active=mode==EditorMode::Drive && foreground_;
@@ -288,6 +292,18 @@ void App::Command(int id,double value)
     if(id==QuitAction) { PostMessageW(window_,WM_CLOSE,0,0); return; }
     if(id==FrameAction || id==FrameSelectedAction) { editor_.Frame(id==FrameSelectedAction); Change(false); return; }
     if(id==CageAction) { editor_.cage=!editor_.cage; Change(false); return; }
+    if(id==FollowCarAction)
+    {
+        if(editor_.mode==EditorMode::ModelBuilder) { Redraw(); return; }
+        editor_.SetFollowing(!editor_.following); Redraw();
+        status_=editor_.following ? L"Follow on: Drive centers the car and keeps orbit/zoom. Editor views and authored data are kept." : L"Follow off: the current Drive view stays free. Editor views and authored data are kept.";
+        return;
+    }
+    if(id==ResetCarAction)
+    {
+        if(editor_.mode!=EditorMode::Drive) { Redraw(); return; }
+        editor_.race.Reset(); editor_.UpdateDriveCamera(); accumulator_=0; Change(false); return;
+    }
     if(id==UndoAction || id==RedoAction)
     {
         gateDraft_.reset();
@@ -526,6 +542,7 @@ void App::Tick(double seconds,bool synthetic)
         }
         editor_.race.Step(command,1./120); ++ticks_; accumulator_-=1./120;
     }
+    editor_.UpdateDriveCamera();
     statusClock_+=seconds;
     const bool statusChanged=statusClock_>=.25;
     if(statusChanged) { status_=L"Drive | "+Wide(gamepad_.Status()); statusClock_=0; }
@@ -617,7 +634,7 @@ void App::Pointer(UINT message,float x,float y,WPARAM buttons)
     if(message==WM_LBUTTONDOWN)
     {
         const auto deleteTarget=ui_.Hit(x,y);
-        if(deleteTarget==RemovePoint || deleteTarget==RemoveGate) Actions(ui_.Cancel()); // Delete committed data, never commit a partial numeric/knot field first.
+        if(deleteTarget==RemovePoint || deleteTarget==RemoveGate || deleteTarget==FollowCarAction || deleteTarget==ResetCarAction) Actions(ui_.Cancel()); // These actions never commit an unapplied numeric/knot field first.
         if(ui_.Editing() && ui_.focus>=GateX && ui_.focus<=GateWidth)
         {
             const auto target=ui_.Hit(x,y);
@@ -863,7 +880,7 @@ void App::TestWorkflow()
     Command(NewPrimitive); Command(CopyPaint); editor_.model.selection.mode=SelectionMode::Face; editor_.model.selection.face=0; Command(AssignPaint); Command(PaintFirst,.7); Command(ExtrudeAction); Command(RefineAction);
     SaveScene(editor_.model.scene,options_.session/"TwoPaint.modeler"); ExportMesh(editor_.model.scene,options_.session/"TwoPaint.h");
     const auto authored=SerializeScene(editor_.model.scene); Draw(!options_.hidden); renderer_.Capture(options_.session/"Model2560x1440.bmp");
-    Mode(EditorMode::TrackBuilder); TestTrackColors(); TestTrackDegrees(); TestTrackKnots(); TestGatePlacements(); TestTrackDeletion(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
+    Mode(EditorMode::TrackBuilder); TestTrackColors(); TestTrackDegrees(); TestTrackKnots(); TestGatePlacements(); TestTrackDeletion(); TestCameraFollow(); Command(ExampleTrack); Draw(!options_.hidden); renderer_.Capture(options_.session/"Track2560x1440.bmp");
     SaveTrack(editor_.track,options_.session/"ExampleCircuit.track");
     Mode(EditorMode::Drive); for(int i=0;i<120;++i) { Tick(1./120,true); if(i%30==0) Draw(!options_.hidden); }
     Draw(!options_.hidden); renderer_.Capture(options_.session/"Drive2560x1440.bmp");
@@ -894,6 +911,61 @@ void App::TestWorkflow()
             else for(int c=0;c<3;++c) Require(presented[output+c]==0,"Presentation margin is not black.");
         }
     }
+}
+void App::TestCameraFollow()
+{
+    Command(ExampleTrack); SaveTrackProject(options_.session/"CameraViews.track"); SaveModel(options_.session/"CameraViews.modeler"); Draw(!options_.hidden);
+    const auto track=SerializeTrack(editor_.track),model=SerializeScene(editor_.model.scene); const auto road=editor_.generated->surfaces[0].data();
+    const auto camera=[](const Camera& value) { return std::array{value.target.x,value.target.y,value.target.z,value.yaw,value.pitch,value.height}; };
+    const auto race=[](const Racing2D::CarState& value) { return std::tuple{value.position.x,value.position.y,value.velocity.x,value.velocity.y,value.heading,value.angularVelocity,value.nextCheckpoint,value.laps,value.collisions,value.lapArmed}; };
+    const auto modelView=camera(editor_.modelCamera); const bool priorForeground=foreground_,priorSynthetic=syntheticVisibility_;
+    auto reveal=[&](int id)
+    {
+        Interface(); const auto* control=ui_.Find(id); Require(control && control->enabled,"Camera control missing/disabled.");
+        if(control->clip.y==ui_.panel.y) { ui_.scroll+=control->rect.y-ui_.panel.y; Interface(); control=ui_.Find(id); }
+        const auto bounds=Ui::Intersect(control->rect,control->clip); Require(bounds.h>0 && ui_.Hit(bounds.x+8,bounds.y+4)==id,"Camera control was not reachable."); return bounds;
+    };
+    auto click=[&](int id) { const auto r=reveal(id),image=presentation_.Image(); const auto point=MAKELPARAM(static_cast<SHORT>(r.x+8+image.x),static_cast<SHORT>(r.y+4+image.y)); SendMessageW(window_,WM_LBUTTONDOWN,MK_LBUTTON,point); SendMessageW(window_,WM_LBUTTONUP,0,point); };
+    auto mode=[&](int id) { click(ModeMenu); click(id); };
+    auto pointer=[&](UINT message,float x,float y) { const auto image=presentation_.Image(); SendMessageW(window_,message,0,MAKELPARAM(static_cast<SHORT>(x+image.x),static_cast<SHORT>(y+image.y))); };
+    auto gesture=[&](UINT down,UINT up,float dx,float dy) { pointer(down,1500,650); pointer(WM_MOUSEMOVE,1500+dx,650+dy); pointer(up,1500+dx,650+dy); };
+    auto centered=[&] { const auto position=editor_.race.State().position; Require(ViewCamera().target.x==static_cast<float>(position.x) && ViewCamera().target.y==0 && ViewCamera().target.z==static_cast<float>(-position.y),"Routed follow failed to center the planar car."); };
+    Require(!editor_.following,"Integrated follow did not default off.");
+    gesture(WM_RBUTTONDOWN,WM_RBUTTONUP,19,-7); gesture(WM_MBUTTONDOWN,WM_MBUTTONUP,15,8); Draw(!options_.hidden); const auto editingView=camera(editor_.trackCamera);
+    click(PointX); SendMessageW(window_,WM_KEYDOWN,VK_BACK,0); SendMessageW(window_,WM_KEYUP,VK_BACK,0); SendMessageW(window_,WM_CHAR,'1',0); SendMessageW(window_,WM_CHAR,'e',0);
+    click(FollowCarAction); Draw(!options_.hidden); Require(editor_.following && !ui_.Editing() && !modifiedTrack_ && !modifiedModel_ && SerializeTrack(editor_.track)==track && camera(editor_.trackCamera)==editingView && !schedule_.WantsTimer(),"Track follow committed a partial field, dirtied data, moved the authoring camera or started an editor timer.");
+    click(FollowCarAction); Command(GateX,editor_.SelectedGate().a.x+1); const auto pending=gateDraft_; click(FollowCarAction);
+    Require(gateDraft_ && pending && gateDraft_->center==pending->center && SerializeTrack(editor_.track)==track && !modifiedTrack_,"View preference consumed the unapplied gate form."); Command(CancelGate); click(FollowCarAction); Draw(!options_.hidden);
+    foreground_=true; mode(DriveMode); Require(!editor_.following && editor_.driveCamera.pitch==.95f && editor_.driveCamera.yaw==0 && editor_.driveCamera.height==editingView[5],"Routed Drive entry lost V2 view convention.");
+    gesture(WM_RBUTTONDOWN,WM_RBUTTONUP,-16,11); gesture(WM_MBUTTONDOWN,WM_MBUTTONUP,-12,8);
+    const auto image=presentation_.Image(); const float oldHeight=ViewCamera().height;
+    SendMessageW(window_,WM_MOUSEWHEEL,MAKEWPARAM(0,120),MAKELPARAM(static_cast<SHORT>(presentation_.originX+image.x+1500),static_cast<SHORT>(presentation_.originY+image.y+650)));
+    Require(ViewCamera().height<oldHeight,"Own-window Drive wheel routing did not zoom the active camera."); const auto free=camera(ViewCamera());
+    for(int i=0;i<30;++i) Tick(1./120,true); Require(camera(ViewCamera())==free,"Free Drive camera moved with the car."); Draw(!options_.hidden);
+    const auto state=race(editor_.race.State()); const auto revision=geometry_.revision; accumulator_=.001; mode(DriveMode);
+    Require(race(editor_.race.State())==state && camera(ViewCamera())==free && accumulator_==.001,"Selecting active Drive reset simulation/camera/accumulator."); accumulator_=0;
+    click(FollowCarAction); Draw(!options_.hidden); centered(); Require(geometry_.revision==revision && race(editor_.race.State())==state && ViewCamera().yaw==free[3] && ViewCamera().pitch==free[4] && ViewCamera().height==free[5],"Follow toggle reset race/orbit/zoom or rebuilt geometry.");
+    for(int i=0;i<30;++i) { Tick(1./120,true); centered(); } Draw(!options_.hidden); renderer_.Capture(options_.session/"CameraFollow2560x1440.bmp");
+    click(FollowCarAction); const auto fixed=camera(ViewCamera()); Tick(1./120,true); Require(camera(ViewCamera())==fixed,"Follow-off introduced a view jump.");
+    click(FollowCarAction); click(ResetCarAction); centered(); Require(editor_.race.State().position==editor_.track.track.spawn.position,"Routed reset lost authored start.");
+    Command(FrameAction); centered(); Require(camera(editor_.trackCamera)==editingView,"Drive frame reset altered stored editor view.");
+    syntheticVisibility_=true; visibility_=Ui::Visibility{}; visibility_.shown=true; schedule_.minimized=false; VisibilityChanged();
+    for(bool follow:{false,true})
+    {
+        if(editor_.following!=follow) click(FollowCarAction);
+        Tick(1./120,true); Draw(!options_.hidden); const auto pausedState=race(editor_.race.State()); const auto pausedView=camera(ViewCamera()); const auto ticks=ticks_,presents=renderer_.Presents();
+        Message(WM_WTSSESSION_CHANGE,WTS_SESSION_LOCK,0); Message(WM_PAINT,0,0); Pump(Clock::now()+std::chrono::milliseconds(40));
+        Require(ticks_==ticks && renderer_.Presents()==presents && race(editor_.race.State())==pausedState && camera(ViewCamera())==pausedView,"Suspension moved race/camera or rendered the blocked view.");
+        Message(WM_WTSSESSION_CHANGE,WTS_SESSION_UNLOCK,0); Require(accumulator_==0 && resetClock_,"Camera-mode resume retained suspended time."); Tick(0,true);
+        Require(race(editor_.race.State())==pausedState && camera(ViewCamera())==pausedView,"Zero-elapsed resume jumped the car/camera.");
+    }
+    mode(ModelMode); Require(camera(editor_.modelCamera)==modelView && camera(editor_.trackCamera)==editingView,"Direct Drive-to-model transition lost independent editor views.");
+    const bool followed=editor_.following; Command(FollowCarAction); Command(ResetCarAction); Require(editor_.following==followed,"Hidden model camera command changed preference.");
+    mode(TrackMode); Require(camera(ViewCamera())==editingView,"Track return did not restore exact editing view."); mode(DriveMode); centered();
+    Require(ViewCamera().height==editingView[5] && ViewCamera().pitch==.95f && ViewCamera().yaw==0,"Drive reentry kept a prior mutated Drive camera."); mode(TrackMode);
+    Require(SerializeTrack(editor_.track)==track && SerializeScene(editor_.model.scene)==model && !modifiedTrack_ && !modifiedModel_ && editor_.generated->surfaces[0].data()==road && camera(ViewCamera())==editingView && !schedule_.WantsTimer(),"Camera/reset/mode changes dirtied assets, rebuilt road, lost editor view or started a timer.");
+    if(editor_.following) click(FollowCarAction); foreground_=priorForeground; syntheticVisibility_=priorSynthetic; schedule_.active=false; gamepad_.SetForeground(false); RefreshVisibility(); ui_.scroll=0; Draw(!options_.hidden);
+    std::ofstream(options_.session/"CameraFollowVerification.txt")<<"Routed follow/free camera, initial/active/repeated Drive, orbit/pan, reset and editor restoration passed\nView-only preferences preserve authored assets, history, clean flags and generated road storage\nFollow targets the planar car's separate 3D presentation; pitch/yaw/height remain unchanged\nSuspended follow/free views add no ticks/presents; zero-elapsed resume preserves exact state/view\nPartial numeric cancellation and pending gate form isolation passed\nPhysical input/actual session notifications/display matching/power remain pending\n";
 }
 void App::TestTrackColors()
 {

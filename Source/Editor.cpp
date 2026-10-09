@@ -223,9 +223,23 @@ void Editor::Mode(EditorMode next)
         if(!generated) throw std::invalid_argument("Build track surfaces before Drive.");
         ValidateTrackProject(track,false); Racing2D::ValidateRace(track.track,*generated,VehicleRadius(track));
         race.Begin(track.track,*generated,VehicleRadius(track));
+        driveCamera=trackCamera; driveCamera.pitch=.95f; driveCamera.yaw=0;
     }
     else race.End();
     mode=next;
+    UpdateDriveCamera();
+}
+bool Editor::SetFollowing(bool value)
+{
+    if(mode==EditorMode::ModelBuilder) throw std::invalid_argument("Camera-follow is a track/Drive view setting.");
+    if(following==value) return false;
+    following=value; UpdateDriveCamera(); return true;
+}
+void Editor::UpdateDriveCamera()
+{
+    if(mode!=EditorMode::Drive || !following) return;
+    const auto position=race.State().position;
+    driveCamera.target={static_cast<float>(position.x),0,static_cast<float>(-position.y)};
 }
 void Editor::BuildTrack() { auto next=Racing2D::Generate(track.track); ValidateTrackProject(track,false); generated=std::move(next); }
 void Editor::NewTrack(bool example)
@@ -261,7 +275,7 @@ void Editor::UseAsset(bool vehicle) { TrackEdit([&] { if(vehicle) track.vehicle=
 void Editor::Frame(bool selected)
 {
     if(selected && (mode!=EditorMode::ModelBuilder || model.selection.object<0 || static_cast<size_t>(model.selection.object)>=model.scene.objects.size())) throw std::invalid_argument("Select a model part to frame.");
-    if(mode!=EditorMode::ModelBuilder) { trackCamera.target={}; trackCamera.height=100; trackCamera.pitch=1.1f; trackCamera.yaw=0; return; }
+    if(mode!=EditorMode::ModelBuilder) { auto& camera=ViewCamera(); camera.target={}; camera.height=100; camera.pitch=1.1f; camera.yaw=0; UpdateDriveCamera(); return; }
     std::vector<PaintVertex> vertices; std::vector<uint32_t> indices;
     if(selected) { Scene part; part.objects={Object()}; BuildSurface(part,vertices,indices); }
     else BuildSurface(model.scene,vertices,indices);

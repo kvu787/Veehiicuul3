@@ -13,7 +13,12 @@ public:
     ModelState model;
     TrackProject track;
     EditorMode mode=EditorMode::ModelBuilder;
-    Camera modelCamera,trackCamera;
+    Camera modelCamera,trackCamera,driveCamera;
+    bool following=false; // View preference, never project data/history.
+    Camera& ViewCamera() { return mode==EditorMode::ModelBuilder ? modelCamera : mode==EditorMode::Drive ? driveCamera : trackCamera; }
+    const Camera& ViewCamera() const { return mode==EditorMode::ModelBuilder ? modelCamera : mode==EditorMode::Drive ? driveCamera : trackCamera; }
+    bool SetFollowing(bool value);
+    void UpdateDriveCamera();
     std::optional<Racing2D::GeneratedTrack> generated;
     Racing2D::Session race;
     std::vector<Racing2D::WeightedPoint> draft;

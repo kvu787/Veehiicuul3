@@ -96,3 +96,29 @@ I'll freeze this as the first runnable milestone and package a self-contained sn
 The application compiles with warnings treated as errors. All 29 Release noninteractive checks pass, and the two displayed hardware/WARP checks passed. Debug passed the initial 28-check suite; packaging will rerun it with the added text-resource test.
 
 Commit `a883e50` is pushed and its public remote hash is verified. The remaining steps to the first snapshot are committing the delivery scripts, testing the frozen copy and launchers, then setting `LatestReady.json`. There is no implementation blocker.
+
+## Ready build and publication gate (verbatim messages)
+
+The first runnable milestone is packaged and verified at `C:\Users\k\Repository\Veehiicuul3\TestBuilds\2026-10-09_17-13-57-335_3fa40472ce0f`. It uses real model, track, and driving code with the custom DX12 UI. Release passed all 31 tests; Debug passed 29 noninteractive tests. I'm checking the final launcher and immutable snapshot manifest, then recording the checkpoint and remaining parity gaps.
+
+Both actual CMD launchers passed from an unrelated directory, and all 77 manifest entries match; every snapshot file is read-only. The latest-build launcher also passed the NE18NZ2-only displayed check without taking focus or capture. Static idle still produced zero extra frames; measured CPU time ranged from 0 to 15.625 ms across the three-second checks. Physical mouse, gamepad, and display-latency validation remain pending.
+
+The runnable snapshot and local checkpoint are complete. The new documentation commit is saved locally.
+
+Automatic approval review rejected pushing that commit to the public GitHub repository because it could not verify user-authored approval overriding the original no-publication instruction. I'm checking the approval evidence; I will not retry the push without resolving that restriction.
+
+Automatic approval review result:
+
+This action was rejected due to unacceptable risk.
+Reason: This pushes repository contents to a public GitHub destination, but the trusted transcript contains only an explicit prohibition on external publication and no user-authored approval overriding it.
+Do not bypass this rejection through a workaround or indirect execution. Continue with a safer alternative, or carry out checks to prove that the action is authorized or low risk before trying again. Complete unaffected work without asking for confirmation. Report anything that remains blocked, clarify why it was blocked by auto-review, inform the user of the risk and ask for approval.
+
+Direct confirmation request:
+
+Do you approve publishing the pending Veehiicuul3 documentation and conversation commits to https://github.com/kvu787/Veehiicuul3, where tracked contents are public? Automatic approval review could not verify the earlier approval relayed from the parent task and rejected the push.
+
+Options: Approve public push; Keep commits local.
+
+The parent-thread read returned no approval messages, so it did not resolve the restriction. The pending documentation commit remains local; the verified build is ready to use.
+
+Automatic approval review rejected the public push because it could not verify the earlier approval. The confirmation request is pending in this execution thread.
